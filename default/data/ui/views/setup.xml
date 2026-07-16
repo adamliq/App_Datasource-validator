@@ -1,0 +1,13 @@
+<dashboard script="app.js" stylesheet="app.css">
+  <label>Data Source Validator - Setup</label>
+  <description>Configure the dedicated service account this app uses for every validation search.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="dsv-setup-root" class="dsv-root">
+          <p class="dsv-loading">Loading setup form&#8230;</p>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

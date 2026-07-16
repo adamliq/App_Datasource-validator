@@ -1,0 +1,157 @@
+/* Data Source Validator - app.css */
+
+.dsv-root {
+    font-family: inherit;
+    padding: 4px 0;
+}
+
+.dsv-loading {
+    color: #999;
+}
+
+.dsv-error {
+    color: #d9534f;
+    font-weight: 600;
+}
+
+.dsv-ok {
+    color: #3c9d40;
+    font-weight: 600;
+}
+
+.dsv-warning {
+    color: #b8860b;
+    font-weight: 600;
+}
+
+/* Table */
+
+.dsv-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.dsv-table th {
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    padding: 6px 8px;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    color: #666;
+}
+
+.dsv-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.dsv-platform-row td {
+    font-weight: 600;
+    background: #fafafa;
+}
+
+.dsv-datasource-row td {
+    color: #333;
+}
+
+/* Status badges - colour is never the only signal, the text label is
+   always rendered too (see app.status_calculator's label/icon/description
+   contract), so these colours are a reinforcement, not the only cue. */
+
+.dsv-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #fff;
+    background: #999;
+}
+
+.dsv-badge-pass, .dsv-badge-green { background: #3c9d40; }
+.dsv-badge-fail, .dsv-badge-red { background: #d9534f; }
+.dsv-badge-error { background: #a02622; }
+.dsv-badge-running, .dsv-badge-queued { background: #3f7fbf; }
+.dsv-badge-not.run, .dsv-badge-amber { background: #d9a441; }
+.dsv-badge-cancelled { background: #888; }
+.dsv-badge-disabled, .dsv-badge-grey { background: #bbb; }
+
+/* Toolbar / forms */
+
+.dsv-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.dsv-run-status {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.dsv-button, .dsv-button-small {
+    background: #5379af;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    cursor: pointer;
+}
+
+.dsv-button-small {
+    padding: 3px 10px;
+    font-size: 0.85em;
+}
+
+.dsv-button:hover, .dsv-button-small:hover {
+    background: #416091;
+}
+
+.dsv-button:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+}
+
+.dsv-form {
+    max-width: 420px;
+}
+
+.dsv-form label {
+    display: block;
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+.dsv-form input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    margin-top: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.dsv-form-message {
+    margin-top: 10px;
+    min-height: 1.2em;
+}
+
+/* Health view */
+
+.dsv-health-list {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    row-gap: 6px;
+}
+
+.dsv-health-list dt {
+    font-weight: 600;
+    color: #555;
+}
+
+.dsv-health-list dd {
+    margin: 0;
+}

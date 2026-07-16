@@ -1,0 +1,58 @@
+{
+    "schemaVersion": "2.0.0",
+    "info": {
+        "title": "Data Source Validator",
+        "id": {
+            "group": null,
+            "name": "datasource_validator",
+            "version": "1.0.0"
+        },
+        "author": [
+            {
+                "name": "[YOUR ORG]",
+                "email": "[SUPPORT EMAIL]",
+                "company": "[YOUR ORG]"
+            }
+        ],
+        "releaseDate": null,
+        "description": "Validates that each user-defined data source, grouped under a parent platform, currently returns at least one event. Uses a dedicated least-privilege service account and a single sequential validation worker so no more than one search runs at a time.",
+        "classification": {
+            "intendedAudience": "IT Ops",
+            "categories": [
+                "IT Operations",
+                "Monitoring & Detection"
+            ],
+            "developmentStatus": "Production"
+        },
+        "commonInformationModels": null,
+        "license": {
+            "name": "Apache License 2.0",
+            "text": "LICENSE",
+            "uri": "https://www.apache.org/licenses/LICENSE-2.0"
+        },
+        "privacyPolicy": {
+            "name": "Privacy Policy",
+            "text": "README/PRIVACY.md",
+            "uri": null
+        },
+        "releaseNotes": {
+            "name": "Release Notes",
+            "text": "README/RELEASE_NOTES.md",
+            "uri": null
+        }
+    },
+    "dependencies": null,
+    "tasks": null,
+    "inputGroups": null,
+    "incompatibleApps": null,
+    "platformRequirements": {
+        "splunk": {
+            "Enterprise": "9.3.0",
+            "Cloud": "*"
+        }
+    },
+    "supportedDeployments": [
+        "_standalone",
+        "_search_head_clustering"
+    ]
+}

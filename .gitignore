@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Splunk local overrides (never ship these, never version-control instance-specific config)
+local/
+local.meta
+
+# OS cruft
+.DS_Store
+Thumbs.db

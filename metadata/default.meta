@@ -1,0 +1,61 @@
+#
+# Data Source Validator - default.meta
+#
+# Least-privilege object permissions. Nothing here relies on the
+# admin_all_objects capability, and dsv_service (the dedicated search
+# identity - see authorize.conf) is deliberately absent from every ACL
+# below: it never touches KV Store directly, it only ever dispatches SPL
+# search jobs. Read/write on app objects is scoped to this app's own three
+# human-facing roles (dsv_admin, dsv_editor, dsv_viewer), not to `*` or
+# to Splunk's built-in `admin`/`power` roles, so users outside this app
+# cannot reach its KV Store data or configuration even via raw KV Store
+# REST calls that bypass the app's own capability-gated endpoints.
+#
+
+[]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin ]
+export = none
+
+[views]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin ]
+export = none
+
+[nav]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin ]
+export = none
+
+[collections/dsv_platforms]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin, dsv_editor ]
+export = none
+
+[collections/dsv_datasources]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin, dsv_editor ]
+export = none
+
+[collections/dsv_validation_runs]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin, dsv_editor ]
+export = none
+
+[collections/dsv_validation_queue]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin, dsv_editor ]
+export = none
+
+[collections/dsv_validation_results]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin, dsv_editor ]
+export = none
+
+[collections/dsv_settings]
+access = read : [ dsv_admin ], write : [ dsv_admin ]
+export = none
+
+[collections/dsv_worker_lease]
+access = read : [ dsv_admin ], write : [ dsv_admin ]
+export = none
+
+[lookups]
+access = read : [ dsv_admin, dsv_editor, dsv_viewer ], write : [ dsv_admin ]
+export = none
+
+[savedsearches]
+access = read : [ dsv_admin ], write : [ dsv_admin ]
+export = none

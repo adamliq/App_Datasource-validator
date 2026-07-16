@@ -1,0 +1,13 @@
+<dashboard script="app.js" stylesheet="app.css">
+  <label>Data Source Validator</label>
+  <description>Platform and data source validation status.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="dsv-home-root" class="dsv-root">
+          <p class="dsv-loading">Loading platforms&#8230;</p>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

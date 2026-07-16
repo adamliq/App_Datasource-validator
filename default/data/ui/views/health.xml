@@ -1,0 +1,13 @@
+<dashboard script="app.js" stylesheet="app.css">
+  <label>Data Source Validator - Health</label>
+  <description>Validation worker lease status and queue depth.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="dsv-health-root" class="dsv-root">
+          <p class="dsv-loading">Loading worker health&#8230;</p>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

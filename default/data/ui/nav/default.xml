@@ -1,0 +1,4 @@
+<nav color="#5379AF">
+  <view name="home" default="true" />
+  <view name="health" />
+</nav>
