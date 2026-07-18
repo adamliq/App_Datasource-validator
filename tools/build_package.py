@@ -172,6 +172,10 @@ def _shippable_files():
         rel_parts = path.relative_to(APP_ROOT).parts
         if any(part in EXCLUDE_DIR_NAMES for part in rel_parts):
             continue
+        # AppInspect rejects any file or directory whose name starts with
+        # "." (dotfiles, __MACOSX, etc.) anywhere in the shipped app.
+        if any(part.startswith(".") for part in rel_parts):
+            continue
         if path.name in EXCLUDE_FILE_NAMES:
             continue
         if path.suffix in EXCLUDE_FILE_SUFFIXES:
