@@ -139,6 +139,8 @@ def load_conf(rel_path):
 REQUIRED_FILES = [
     "app.manifest",
     "README.md",
+    "README/PRIVACY.md",
+    "README/RELEASE_NOTES.md",
     "LICENSE",
     "default/app.conf",
     "default/authorize.conf",
@@ -715,6 +717,8 @@ KNOWN_PLACEHOLDERS = (
     "[YOUR ORG]",
     "[SUPPORT EMAIL]",
     "[SUPPORT MODEL]",
+    "[DATE]",
+    "[VERSION]",
     "REPLACE_WITH_",
 )
 
