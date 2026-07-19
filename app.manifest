@@ -45,12 +45,7 @@
     "tasks": null,
     "inputGroups": null,
     "incompatibleApps": null,
-    "platformRequirements": {
-        "splunk": {
-            "Enterprise": "9.3.0",
-            "Cloud": "*"
-        }
-    },
+    "platformRequirements": null,
     "supportedDeployments": [
         "_standalone",
         "_search_head_clustering"
