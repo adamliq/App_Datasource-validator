@@ -25,6 +25,24 @@ require([
     var POLL_INTERVAL_MS = 4000;
     var HEALTH_POLL_INTERVAL_MS = 5000;
 
+    // SPECULATIVE FIX (unconfirmed against a live instance): Splunk Web
+    // CSRF-protects state-changing methods (POST/PUT/DELETE) but not GET,
+    // requiring an X-Splunk-Form-Key header sourced from a
+    // splunkweb_csrf_token_<port> cookie. A live report showed exactly
+    // this signature - GET succeeded, POST failed with a bare "Forbidden"
+    // before reaching this app's own REST handler. splunkjs's Service
+    // object exposes no way to attach a custom header through post()/
+    // del() (only the lower-level request() takes one), so this attaches
+    // the header to every jQuery AJAX call on the page instead - additive
+    // only, never removes any protection. If this wasn't the real cause,
+    // it's a no-op: the header is simply ignored when not required.
+    $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+        var match = document.cookie.match(/splunkweb_csrf_token_\d+=([^;]+)/);
+        if (match) {
+            jqXHR.setRequestHeader('X-Splunk-Form-Key', decodeURIComponent(match[1]));
+        }
+    });
+
     function parseResponse(response) {
         var data = response && response.data;
         if (data && typeof data === 'object' && typeof data.payload === 'string') {

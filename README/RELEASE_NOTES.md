@@ -1,5 +1,18 @@
 # Release Notes — Data Source Validator
 
+## 1.0.3 — [DATE]
+
+- Speculative fix (not yet confirmed against a live instance) for the
+  setup page's Save button being blocked with a bare "Forbidden" on
+  POST while GET succeeded: attaches Splunk Web's CSRF token
+  (`X-Splunk-Form-Key`, read from the `splunkweb_csrf_token_<port>`
+  cookie) to every AJAX request, since `splunkjs`'s Service object has
+  no way to attach a custom header through `post()`/`del()`. Additive
+  only - does not weaken CSRF protection.
+- Bumped `[install] build` again, since this touches
+  `appserver/static/app.js` and Splunk Web's static-asset cache is
+  keyed off that number, not the semantic version.
+
 ## 1.0.2 — [DATE]
 
 - Bumped `[install] build` (Splunk Web's static-asset cache-busting
