@@ -1,5 +1,13 @@
 # Release Notes — Data Source Validator
 
+## 1.0.2 — [DATE]
+
+- Bumped `[install] build` (Splunk Web's static-asset cache-busting
+  number) so the 1.0.1 setup-page fix actually takes effect in
+  browsers/Splunk Web instances that had cached the pre-fix
+  `appserver/static/app.js`. No functional changes beyond 1.0.1 - see
+  below.
+
 ## 1.0.1 — [DATE]
 
 Bug fixes, found via testing against real Splunk infrastructure.
