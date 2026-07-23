@@ -36,10 +36,23 @@ class RestRequest:
         self.session = raw.get("session") or {}
         self.session_key = self.session.get("authtoken")
         self.user = self.session.get("user")
-        self.payload = _parse_payload(raw.get("payload"))
+        # A POST/PUT body arrives as `form` (application/x-www-form-urlencoded
+        # - what splunkjs's service.post()/put() send by default) or as
+        # `payload` (a raw JSON string body), depending on the caller's
+        # Content-Type. Merge both so a handler never has to know which one
+        # a given client used - only reading `payload` silently dropped
+        # every form-encoded submission (the setup page's save button
+        # included) into an empty {} payload.
+        self.payload = dict(_parse_payload(raw.get("payload")))
+        self.payload.update(_pairs_to_dict(raw.get("form") or []))
 
 
 def _pairs_to_dict(pairs):
+    # Splunk has been observed to hand persistent-connection query/form
+    # data back as either a list of [key, value] pairs or a flat
+    # {key: value} dict - accept both rather than assuming one.
+    if isinstance(pairs, dict):
+        return dict(pairs)
     result = {}
     for pair in pairs:
         if isinstance(pair, (list, tuple)) and len(pair) == 2:

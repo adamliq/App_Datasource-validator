@@ -42,6 +42,37 @@ class RestRequestParsingTests(unittest.TestCase):
         req = RestRequest(raw)
         self.assertEqual(req.payload, {})
 
+    def test_parses_form_encoded_body_as_list_of_pairs(self):
+        # This is what a real form-encoded POST (e.g. the setup page's
+        # save button, via splunkjs's service.post()) delivers - Splunk's
+        # persistent-connection protocol carries it as `form`, not
+        # `payload`, which `payload` alone previously ignored entirely.
+        raw = {
+            "method": "POST",
+            "form": [["username", "svc-dsv"], ["password", "s3cret"]],
+        }
+        req = RestRequest(raw)
+        self.assertEqual(req.payload, {"username": "svc-dsv", "password": "s3cret"})
+
+    def test_parses_form_encoded_body_as_flat_dict(self):
+        raw = {"method": "POST", "form": {"username": "svc-dsv"}}
+        req = RestRequest(raw)
+        self.assertEqual(req.payload, {"username": "svc-dsv"})
+
+    def test_form_and_json_payload_are_merged(self):
+        raw = {
+            "method": "POST",
+            "payload": json.dumps({"name": "Firewall"}),
+            "form": [["extra", "1"]],
+        }
+        req = RestRequest(raw)
+        self.assertEqual(req.payload, {"name": "Firewall", "extra": "1"})
+
+    def test_query_accepts_flat_dict_too(self):
+        raw = {"method": "GET", "query": {"limit": "10"}}
+        req = RestRequest(raw)
+        self.assertEqual(req.query, {"limit": "10"})
+
     def test_missing_method_defaults_to_get(self):
         req = RestRequest({})
         self.assertEqual(req.method, "GET")

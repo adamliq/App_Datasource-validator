@@ -34,6 +34,13 @@ require([
                 return data.payload;
             }
         }
+        // Some paths through Splunk Web's proxy hand back the persist
+        // handler's payload already parsed into an object rather than as
+        // the JSON string it's normally wrapped in - use it directly
+        // instead of returning the outer {payload: ..., status: ...} shell.
+        if (data && typeof data === 'object' && data.payload && typeof data.payload === 'object') {
+            return data.payload;
+        }
         if (typeof data === 'string') {
             try {
                 return JSON.parse(data);
@@ -42,6 +49,40 @@ require([
             }
         }
         return data;
+    }
+
+    // Every bin/rest_*.py handler (see app/rest_base.py) returns errors as
+    // {"error": "message"} in its JSON body, but it was never confirmed
+    // against a live instance whether a failed request's `err` from
+    // splunkjs mirrors the same {data: {payload: "<json>"}} envelope a
+    // successful response uses, or hands back something flatter - so this
+    // tries every shape defensively instead of assuming one.
+    function extractErrorMessage(obj, depth) {
+        if (!obj || typeof obj !== 'object' || depth > 4) { return null; }
+        if (typeof obj.error === 'string' && obj.error) { return obj.error; }
+        if (typeof obj.payload === 'string') {
+            try {
+                var found = extractErrorMessage(JSON.parse(obj.payload), depth + 1);
+                if (found) { return found; }
+            } catch (e) { /* payload wasn't JSON - fall through */ }
+        } else if (obj.payload && typeof obj.payload === 'object') {
+            var foundInPayload = extractErrorMessage(obj.payload, depth + 1);
+            if (foundInPayload) { return foundInPayload; }
+        }
+        // Standard splunkd REST error envelope, in case a raw platform
+        // error (e.g. from the login attempt in rest_config.py) ever
+        // surfaces before this app's own handler can wrap it.
+        if (Array.isArray(obj.messages) && obj.messages.length) {
+            var texts = obj.messages
+                .map(function (m) { return m && (m.text || m.message); })
+                .filter(Boolean);
+            if (texts.length) { return texts.join('; '); }
+        }
+        if (obj.data) {
+            var foundInData = extractErrorMessage(obj.data, depth + 1);
+            if (foundInData) { return foundInData; }
+        }
+        return null;
     }
 
     function restGet(path, params) {
@@ -82,13 +123,20 @@ require([
 
     function errorText(err) {
         if (!err) { return 'unknown error'; }
-        if (err.data && err.data.payload) {
-            try {
-                var parsed = JSON.parse(err.data.payload);
-                if (parsed && parsed.error) { return parsed.error; }
-            } catch (e) { /* fall through */ }
+
+        var extracted = extractErrorMessage(err, 0);
+        if (extracted) { return extracted; }
+
+        if (err.message) { return err.message; }
+
+        var status = err.status || (err.response && err.response.statusCode);
+        var suffix = status ? ' (HTTP ' + status + ')' : '';
+
+        try {
+            return 'unrecognized error response' + suffix + ': ' + JSON.stringify(err);
+        } catch (e) {
+            return 'unrecognized error response' + suffix;
         }
-        return err.message || String(err);
     }
 
     function el(tag, attrs, children) {
@@ -121,6 +169,7 @@ require([
         restGet('datasource_validator/config').done(function (config) {
             renderSetupForm(root, config || {});
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load setup status: ' + errorText(err) }));
             renderSetupForm(root, {});
@@ -171,6 +220,7 @@ require([
                 message.className = 'dsv-form-message dsv-ok';
                 passwordInput.value = '';
             }).fail(function (err) {
+                console.error('[dsv]', err);
                 message.textContent = 'Save failed: ' + errorText(err);
                 message.className = 'dsv-form-message dsv-error';
             }).always(function () {
@@ -209,6 +259,7 @@ require([
         ).done(function (platformsResp, datasourcesResp) {
             renderHome(root, (platformsResp[0] || {}).platforms || [], (datasourcesResp[0] || {}).datasources || []);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load status: ' + errorText(err) }));
         });
@@ -278,6 +329,7 @@ require([
         restPost('datasource_validator/run', payload).done(function (run) {
             pollRun(root, statusEl, run.run_id);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             statusEl.textContent = 'Could not start run: ' + errorText(err);
         });
     }
@@ -302,6 +354,7 @@ require([
                     loadHome(root);
                 }
             }).fail(function (err) {
+                console.error('[dsv]', err);
                 statusEl.textContent = 'Lost track of run status: ' + errorText(err);
             });
         }
@@ -321,6 +374,7 @@ require([
             renderHealth(root, health || {});
             setTimeout(function () { loadHealth(root); }, HEALTH_POLL_INTERVAL_MS);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load health status: ' + errorText(err) }));
             setTimeout(function () { loadHealth(root); }, HEALTH_POLL_INTERVAL_MS);
