@@ -1,5 +1,24 @@
 # Release Notes — Data Source Validator
 
+## 1.0.1 — [DATE]
+
+Bug fixes, found via testing against real Splunk infrastructure.
+
+- Fixed the setup page's Save button always failing with an unreadable
+  error. Root cause: Splunk's persistent-connection REST protocol
+  delivers a form-encoded POST body via a separate `form` field, distinct
+  from `payload` (raw JSON bodies only); the REST handler base only read
+  `payload`, so every form-encoded POST/PUT - not just setup - landed as
+  an empty body server-side.
+- Fixed a Splunk Cloud vetting failure (`check_that_app_passes_slim_validation_for_cloud`)
+  caused by a stale version table in Splunk's own packaging-validation
+  tooling rejecting an accurate Splunk Enterprise 9.3+ compatibility
+  declaration. The manifest no longer declares a machine-readable minimum
+  version; the real requirement (Splunk Enterprise 9.3+) stays documented
+  in README.md.
+- Hardened client-side error handling so setup/REST failures show the
+  actual server message instead of a generic error.
+
 ## 1.0.0 — [DATE]
 
 Initial release.
