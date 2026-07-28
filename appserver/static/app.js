@@ -21,7 +21,17 @@ require([
 ], function ($, mvc) {
     'use strict';
 
-    var service = mvc.createService();
+    // Live report: with mvc.createService() called with no arguments, a POST
+    // was observed going to /servicesNS/<the just-typed service-account
+    // username>/datasource_validator/..., not the logged-in admin's own
+    // session (confirmed - the tester was authenticated as sc_admin, not as
+    // that account) and not `nobody`. All of this app's own KV Store /
+    // storage/passwords config is app-level, not user-private, and the
+    // server side (bin/app/splunk_client.py's DEFAULT_OWNER) already
+    // targets "nobody" for it - pin the client to the same explicit
+    // namespace instead of relying on whatever mvc.createService() resolves
+    // implicitly, which produced the wrong owner at least once.
+    var service = mvc.createService({ owner: 'nobody' });
     var POLL_INTERVAL_MS = 4000;
     var HEALTH_POLL_INTERVAL_MS = 5000;
 

@@ -1,5 +1,22 @@
 # Release Notes — Data Source Validator
 
+## 1.0.4 — [DATE]
+
+- Fixed the real cause of the setup page's "insufficient permission to
+  access this resource" (403) on Save: `mvc.createService()` was called
+  with no arguments, leaving its REST-call namespace unpinned. A live
+  report showed POST going to
+  `/servicesNS/<the just-typed service-account username>/...` while the
+  tester was authenticated as a different (admin) account - Splunk's
+  REST framework checks namespace-crossing rights on that owner segment
+  independently of the endpoint's own capability gate, and correctly
+  rejected it. This app's config (KV Store, `storage/passwords`) is
+  app-level, not user-private, and the server side already targets the
+  `nobody` namespace for it; the client now does too
+  (`mvc.createService({ owner: 'nobody' })`).
+- Bumped `[install] build` again, since this touches
+  `appserver/static/app.js`.
+
 ## 1.0.3 — [DATE]
 
 - Speculative fix (not yet confirmed against a live instance) for the
