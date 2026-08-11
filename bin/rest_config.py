@@ -14,6 +14,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Imported as a module, not `from app.rest_base import DsvPersistentHandler`
+# - Splunk's persist-connection loader scans this script's own top-level
+# namespace for every class satisfying `issubclass(_,
+# PersistentServerConnectionApplication)` and fails to start ("More than
+# one class implements PersistentServerConnectionApplication") if it
+# finds more than one. A direct import makes the shared base class itself
+# a top-level name here, alongside the one concrete handler below -
+# module-qualifying the reference keeps it out of that scan. Confirmed
+# live: this is exactly what broke setup-page saves.
+from app import rest_base  # noqa: E402
 from app import security  # noqa: E402
 from app.models.settings import (  # noqa: E402
     DEFAULT_DISPATCH_TIMEOUT_SEC,
@@ -22,7 +32,6 @@ from app.models.settings import (  # noqa: E402
     SEARCH_TIME_RANGE_LATEST,
     SettingsStore,
 )
-from app.rest_base import DsvPersistentHandler  # noqa: E402
 from app.splunk_client import (  # noqa: E402
     ServiceHandle,
     SplunkRestError,
@@ -40,7 +49,7 @@ SETTINGS_FIELDS = {
 }
 
 
-class DsvConfigHandler(DsvPersistentHandler):
+class DsvConfigHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         service = ServiceHandle(request.session_key)
         credential = security.get_service_credential(service)

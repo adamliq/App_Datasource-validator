@@ -22,7 +22,12 @@ from app.models.validation_result import ValidationResultStore  # noqa: E402
 from app.models.validation_run import ValidationRunStore  # noqa: E402
 from app.models.worker_lease import WorkerLeaseStore  # noqa: E402
 from app.query_validator import QueryValidator  # noqa: E402
-from app.rest_base import DsvPersistentHandler  # noqa: E402
+# rest_base imported as a module, not `from app.rest_base import
+# DsvPersistentHandler` - see bin/rest_config.py's import comment for why
+# (a direct import breaks Splunk's persist-connection loader). This file
+# defines 8 concrete handlers below, so it's especially important that
+# the shared base class itself isn't ALSO a top-level name here.
+from app import rest_base  # noqa: E402
 from app.splunk_client import SplunkRestSearchParser, get_current_user_capabilities, kv_store  # noqa: E402
 from app.status_calculator import compute_datasource_display_status, compute_platform_status  # noqa: E402
 from validation_controller import Stores, cancel_run, create_run  # noqa: E402
@@ -97,7 +102,7 @@ def _datasource_dict(ds, threshold):
     }
 
 
-class DsvPlatformsHandler(DsvPersistentHandler):
+class DsvPlatformsHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         stores = _stores(request.session_key)
         threshold = _default_stale_threshold(request.session_key)
@@ -127,7 +132,7 @@ class DsvPlatformsHandler(DsvPersistentHandler):
         return _platform_dict(platform, []), 201
 
 
-class DsvPlatformHandler(DsvPersistentHandler):
+class DsvPlatformHandler(rest_base.DsvPersistentHandler):
     def _platform_id(self, request):
         if not request.path_segments:
             raise ValueError("platform_id is required in the URL path")
@@ -173,7 +178,7 @@ class DsvPlatformHandler(DsvPersistentHandler):
         return {"deleted": platform_id}
 
 
-class DsvDatasourcesHandler(DsvPersistentHandler):
+class DsvDatasourcesHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         stores = _stores(request.session_key)
         threshold = _default_stale_threshold(request.session_key)
@@ -208,7 +213,7 @@ class DsvDatasourcesHandler(DsvPersistentHandler):
         return _datasource_dict(ds, threshold), 201
 
 
-class DsvDatasourceHandler(DsvPersistentHandler):
+class DsvDatasourceHandler(rest_base.DsvPersistentHandler):
     def _datasource_id(self, request):
         if not request.path_segments:
             raise ValueError("datasource_id is required in the URL path")
@@ -255,7 +260,7 @@ class DsvDatasourceHandler(DsvPersistentHandler):
         return {"deleted": datasource_id}
 
 
-class DsvRunsHandler(DsvPersistentHandler):
+class DsvRunsHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         stores = _stores(request.session_key)
         status = request.query.get("status")
@@ -275,7 +280,7 @@ class DsvRunsHandler(DsvPersistentHandler):
         return _run_dict(run), 201
 
 
-class DsvRunHandler(DsvPersistentHandler):
+class DsvRunHandler(rest_base.DsvPersistentHandler):
     def _run_id(self, request):
         if not request.path_segments:
             raise ValueError("run_id is required in the URL path")
@@ -300,7 +305,7 @@ class DsvRunHandler(DsvPersistentHandler):
         return self.handle_post(request)
 
 
-class DsvQueueHandler(DsvPersistentHandler):
+class DsvQueueHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         stores = _stores(request.session_key)
         run_id = request.query.get("run_id")
@@ -315,7 +320,7 @@ class DsvQueueHandler(DsvPersistentHandler):
         }
 
 
-class DsvResultsHandler(DsvPersistentHandler):
+class DsvResultsHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         stores = _stores(request.session_key)
         datasource_id = request.query.get("datasource_id")

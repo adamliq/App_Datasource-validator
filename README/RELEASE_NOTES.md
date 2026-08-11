@@ -1,5 +1,20 @@
 # Release Notes — Data Source Validator
 
+## 1.0.6 — [DATE]
+
+- Fixed the setup page's Save button failing with "Error starting:
+  More than one class implements PersistentServerConnectionApplication".
+  Splunk's persist-connection loader scans a REST handler script's own
+  top-level namespace for every class satisfying `issubclass(_,
+  PersistentServerConnectionApplication)`, and refuses to start if it
+  finds more than one. `from app.rest_base import DsvPersistentHandler`
+  made the shared base class itself a top-level name in every handler
+  script, alongside each script's own concrete handler(s) - `bin/rest_
+  config.py`, `bin/rest_query.py`, `bin/rest_health.py`, and `bin/rest_
+  validation.py` (8 handlers) now import `rest_base` as a module and
+  reference `rest_base.DsvPersistentHandler`, keeping the base class out
+  of that scan.
+
 ## 1.0.5 — [DATE]
 
 - Granted this app's 4 custom capabilities (`dsv_admin_config`,

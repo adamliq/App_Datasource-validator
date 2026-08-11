@@ -15,11 +15,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.models.base import parse_iso, utcnow_iso  # noqa: E402
 from app.models.validation_queue import QUEUE_STATUS_QUEUED, ValidationQueueStore  # noqa: E402
 from app.models.worker_lease import WorkerLeaseStore  # noqa: E402
-from app.rest_base import DsvPersistentHandler  # noqa: E402
+# rest_base imported as a module, not `from app.rest_base import
+# DsvPersistentHandler` - see bin/rest_config.py's import comment for why
+# (a direct import breaks Splunk's persist-connection loader).
+from app import rest_base  # noqa: E402
 from app.splunk_client import kv_store  # noqa: E402
 
 
-class DsvHealthHandler(DsvPersistentHandler):
+class DsvHealthHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         lease_store = WorkerLeaseStore(kv_store(request.session_key, WorkerLeaseStore.collection_name))
         queue_store = ValidationQueueStore(kv_store(request.session_key, ValidationQueueStore.collection_name))
