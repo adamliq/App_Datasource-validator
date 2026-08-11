@@ -1,5 +1,18 @@
 # Release Notes — Data Source Validator
 
+## 1.0.5 — [DATE]
+
+- Granted this app's 4 custom capabilities (`dsv_admin_config`,
+  `dsv_manage_datasources`, `dsv_run_validation`, `dsv_view_results`)
+  directly to Splunk's built-in `admin` and Splunk Cloud `sc_admin`
+  roles in `authorize.conf`, in addition to the app's own
+  `dsv_admin`/`dsv_editor`/`dsv_viewer` roles. Previously an admin had
+  to separately discover and assign `role_dsv_admin` (or hand-check
+  these capabilities) before the setup page was usable at all - now
+  any built-in admin gets them automatically. Only adds capability
+  keys, never touches `importRoles`/`grantableRoles`, so it merges
+  with rather than replaces what those roles already grant.
+
 ## 1.0.4 — [DATE]
 
 - Fixed the real cause of the setup page's "insufficient permission to

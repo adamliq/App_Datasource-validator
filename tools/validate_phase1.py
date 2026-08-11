@@ -346,11 +346,20 @@ def check_authorize():
     else:
         ok("default/authorize.conf: 4 capabilities defined")
 
-    if len(roles) != 4:
-        fail(f"default/authorize.conf: expected 4 roles, found "
-             f"{len(roles)}: {roles}")
+    # The app defines exactly 4 of its own roles (dsv_admin/editor/viewer/
+    # service). It may additionally grant its capabilities to built-in
+    # admin roles (role_admin, role_sc_admin - see the "Built-in admin
+    # roles" section of authorize.conf) without redeclaring them, so those
+    # don't count toward this check.
+    dsv_roles = [r for r in roles if r.startswith("role_dsv_")]
+    builtin_admin_grants = sorted(set(roles) - set(dsv_roles))
+
+    if len(dsv_roles) != 4:
+        fail(f"default/authorize.conf: expected 4 dsv_* roles, found "
+             f"{len(dsv_roles)}: {dsv_roles}")
     else:
-        ok("default/authorize.conf: 4 roles defined")
+        suffix = f" (plus built-in admin grants: {builtin_admin_grants})" if builtin_admin_grants else ""
+        ok(f"default/authorize.conf: 4 dsv_* roles defined{suffix}")
 
     cap_names = {c.split("::", 1)[1] for c in capabilities}
 
