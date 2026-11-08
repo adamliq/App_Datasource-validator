@@ -1,5 +1,31 @@
 # Release Notes — Data Source Validator
 
+## 1.0.7 — [DATE]
+
+Two fixes confirmed against a real Splunk Enterprise instance (Docker), found
+while investigating why the `dsv_validation_worker` modular input never
+registers:
+
+- `default/savedsearches.conf` had an invalid `is_scheduled = 1` key in both
+  stanzas. `is_scheduled` is a read-only field Splunk reports back over the
+  REST API (derived from `enableSched`), not a real settable conf key -
+  Splunk's own startup config check flagged it as invalid. Removed; the
+  already-present `enableSched = 1` is what actually enables scheduling.
+- `bin/dsv_validation_worker.py` was packaged non-executable (644). Modular
+  inputs are invoked by Splunk executing the script directly (via its
+  shebang), unlike REST persist handlers which Splunk invokes through an
+  explicit `python3 <script>` call - a non-executable modular input script
+  can be silently skipped during discovery. Now packaged 755, matching
+  AppInspect's own file-permission guidance.
+
+Still unresolved: in local Docker testing (a recent Splunk Enterprise build),
+the modular input scheme does not get auto-discovered even with both fixes
+applied, and reproduces identically with a trivial throwaway test app
+unrelated to this one - strong evidence this specific gap is an
+environment/version characteristic of that test setup, not a defect in this
+app's code, but it means the live Splunk Cloud "modular input never
+registers" report is not yet confirmed fixed end-to-end.
+
 ## 1.0.6 — [DATE]
 
 - Fixed the setup page's Save button failing with "Error starting:
