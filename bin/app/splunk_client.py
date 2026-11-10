@@ -63,7 +63,16 @@ def request(session_key, path, method="GET", getargs=None, postargs=None, raise_
             raiseAllErrors=False,
         )
     except Exception as e:
-        raise SplunkRestError(f"request to {path} failed: {e}")
+        # splunk.rest.simpleRequest raises (e.g. splunk.ResourceNotFound for
+        # a 404) for some conditions even with raiseAllErrors=False - most
+        # notably a GET for a KV Store document that doesn't exist, which
+        # every caller of this module treats as a normal, expected outcome
+        # (see KVCollectionClient.get()'s 404 -> None). Confirmed live:
+        # splunk's own REST exceptions carry the real status on
+        # .statusCode; without recovering it here every such exception
+        # loses its status (None) and 404-tolerant callers can never match
+        # it, turning a routine "not found" into an unhandled 500.
+        raise SplunkRestError(f"request to {path} failed: {e}", status=getattr(e, "statusCode", None))
 
     status = getattr(server_response, "status", None)
     if raise_on_error and (status is None or status >= 300):

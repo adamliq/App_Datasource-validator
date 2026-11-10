@@ -6,8 +6,10 @@ GET returns whether setup has completed and the app's non-secret
 settings (never the stored password). POST is the only place the
 dsv_service credential is ever written: it's verified with a real login
 attempt before being persisted, so a typo never silently becomes the
-stored credential, and once stored, is_configured flips true and the
-validation worker input is enabled.
+stored credential, and once stored, is_configured flips true. The
+validation worker input is enabled as the last step; if that alone
+fails, the credential/settings save already succeeded and is not rolled
+back - the response carries a "warning" instead of failing outright.
 """
 import sys
 from pathlib import Path
@@ -83,6 +85,26 @@ class DsvConfigHandler(rest_base.DsvPersistentHandler):
                 settings_store.set(field, str(caster(payload[field])), updated_by=request.user)
 
         set_app_configured(request.session_key)
-        enable_modular_input(request.session_key)
 
-        return {"configured": True, "service_username": username}
+        # The credential and settings above are the part of "save" that
+        # must not be lost: they're already durably written by this
+        # point. Enabling the worker input is the last step, but if it
+        # 404s (observed live: the modular input object can be absent
+        # even when inputs.conf is correctly loaded - an environment/
+        # registration issue, not something this save can fix) that must
+        # not discard an otherwise-successful credential save and report
+        # a hard failure for something that did work.
+        worker_enable_warning = None
+        try:
+            enable_modular_input(request.session_key)
+        except SplunkRestError as e:
+            worker_enable_warning = (
+                "Service account saved, but the validation worker could not be "
+                f"enabled automatically: {e}. Enable it manually under Settings "
+                "> Data Inputs once available, or retry setup."
+            )
+
+        result = {"configured": True, "service_username": username}
+        if worker_enable_warning:
+            result["warning"] = worker_enable_warning
+        return result

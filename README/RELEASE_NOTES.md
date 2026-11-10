@@ -1,5 +1,22 @@
 # Release Notes — Data Source Validator
 
+## 1.0.8 — [DATE]
+
+Found and fixed by driving the setup page's actual save flow end-to-end
+against a live Splunk Enterprise instance (Docker), past the fixes in
+1.0.4-1.0.7:
+
+- `bin/app/splunk_client.py`'s `request()` discarded the HTTP status code
+  whenever `splunk.rest.simpleRequest()` raised an exception rather than
+  returning a response object - confirmed live that it does exactly this
+  for a KV Store GET on a document that doesn't exist yet
+  (`splunk.ResourceNotFound`, `.statusCode = 404`), even with
+  `raiseAllErrors=False`. Every `SplunkRestError` built from that path got
+  `status=None`, so `KVCollectionClient.get()`'s `if e.status == 404:
+  return None` could never match - turning the routine "this setting
+  isn't set yet" case (true on every first-time setup save) into an
+  unhandled 500. Now recovered from the exception's `.statusCode`.
+
 ## 1.0.7 — [DATE]
 
 Two fixes confirmed against a real Splunk Enterprise instance (Docker), found

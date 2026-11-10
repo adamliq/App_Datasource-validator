@@ -244,8 +244,13 @@ require([
                 default_stale_threshold_sec: thresholdInput.value,
                 default_dispatch_timeout_sec: timeoutInput.value
             }).done(function (result) {
-                message.textContent = 'Saved. The validation worker is now enabled.';
-                message.className = 'dsv-form-message dsv-ok';
+                if (result && result.warning) {
+                    message.textContent = 'Saved with a warning: ' + result.warning;
+                    message.className = 'dsv-form-message dsv-warning';
+                } else {
+                    message.textContent = 'Saved. The validation worker is now enabled.';
+                    message.className = 'dsv-form-message dsv-ok';
+                }
                 passwordInput.value = '';
             }).fail(function (err) {
                 console.error('[dsv]', err);
