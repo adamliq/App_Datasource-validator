@@ -31,7 +31,13 @@ from app.models.base import NotFoundError
 class RestRequest:
     def __init__(self, raw):
         self.method = (raw.get("method") or "GET").upper()
-        self.path_segments = [p for p in (raw.get("path") or "").split("/") if p]
+        # Splunk's persist-connection protocol hands the id/path remainder
+        # after the restmap `match` prefix as `path_info`, not `path` -
+        # confirmed live via DEBUG logging of the raw request dict; reading
+        # the wrong key meant every item-level request (e.g. GET
+        # /platforms/<id>) silently saw an empty path and was treated as a
+        # collection-level request instead.
+        self.path_segments = [p for p in (raw.get("path_info") or "").split("/") if p]
         self.query = _pairs_to_dict(raw.get("query") or [])
         self.session = raw.get("session") or {}
         self.session_key = self.session.get("authtoken")

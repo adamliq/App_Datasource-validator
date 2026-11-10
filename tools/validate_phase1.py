@@ -163,11 +163,8 @@ REQUIRED_FILES = [
     "bin/validation_controller.py",
     "bin/rest_config.py",
     "bin/rest_platforms.py",
-    "bin/rest_platform.py",
     "bin/rest_datasources.py",
-    "bin/rest_datasource.py",
     "bin/rest_runs.py",
-    "bin/rest_run.py",
     "bin/rest_queue.py",
     "bin/rest_results.py",
     "bin/rest_query.py",
@@ -460,11 +457,11 @@ def check_restmap(cap_names):
         return None
 
     script_stanzas = [s for s in order if s.startswith("script:")]
-    if len(script_stanzas) != 11:
-        fail(f"default/restmap.conf: expected 11 REST endpoints, found "
+    if len(script_stanzas) != 8:
+        fail(f"default/restmap.conf: expected 8 REST endpoints, found "
              f"{len(script_stanzas)}: {script_stanzas}")
     else:
-        ok("default/restmap.conf: 11 REST endpoints defined")
+        ok("default/restmap.conf: 8 REST endpoints defined")
 
     bad_auth = []
     bad_caps = []

@@ -1,8 +1,7 @@
 """
-Shared helpers for the 8 platform/data-source/run/queue/results REST
-handlers (bin/rest_platforms.py, rest_platform.py, rest_datasources.py,
-rest_datasource.py, rest_runs.py, rest_run.py, rest_queue.py,
-rest_results.py).
+Shared helpers for the platform/data-source/run/queue/results REST
+handlers (bin/rest_platforms.py, rest_datasources.py, rest_runs.py,
+rest_queue.py, rest_results.py).
 
 These handlers used to live together in one bin/rest_validation.py, but
 Splunk's persist-connection loader requires exactly one class satisfying
@@ -14,6 +13,13 @@ implements PersistentServerConnectionApplication". Splitting into one
 script per handler, with the actual logic shared from here (a module
 under bin/app/, never itself a REST entry point restmap.conf points at),
 fixes that while keeping the logic itself in one place.
+
+rest_platforms.py, rest_datasources.py and rest_runs.py each handle both
+their collection path and the single-item path (e.g. /platforms and
+/platforms/<id>) in one class, branching on request.path_segments,
+rather than splitting those further into a second "item" handler behind
+a second, trailing-slash restmap match - see restmap.conf's header
+comment for why that second stanza doesn't actually work.
 """
 from app.models.base import NotFoundError  # noqa: F401 - re-exported for handler modules
 from app.models.datasource import DataSourceStore

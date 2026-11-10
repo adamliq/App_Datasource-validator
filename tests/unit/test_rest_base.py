@@ -14,14 +14,17 @@ class RestRequestParsingTests(unittest.TestCase):
     def test_parses_method_path_query_session(self):
         raw = {
             "method": "get",
-            "path": "/datasource_validator/platforms/p1/",
+            # Splunk's persist-connection protocol sends the id/path
+            # remainder after the restmap `match` prefix as `path_info`
+            # (e.g. "p1" for a request to .../platforms/p1), not "path".
+            "path_info": "p1",
             "query": [["limit", "10"], ["status", "PASS"]],
             "session": {"authtoken": "tok123", "user": "alice"},
             "payload": None,
         }
         req = RestRequest(raw)
         self.assertEqual(req.method, "GET")
-        self.assertEqual(req.path_segments, ["datasource_validator", "platforms", "p1"])
+        self.assertEqual(req.path_segments, ["p1"])
         self.assertEqual(req.query, {"limit": "10", "status": "PASS"})
         self.assertEqual(req.session_key, "tok123")
         self.assertEqual(req.user, "alice")
@@ -106,7 +109,7 @@ class DispatchAndExceptionMappingTests(unittest.TestCase):
     def _invoke(self, behavior, method="GET", payload=None):
         handler = _ProbeHandler()
         handler.behavior = behavior
-        raw = {"method": method, "path": "", "query": [], "session": {"authtoken": "tok"}, "payload": payload}
+        raw = {"method": method, "path_info": "", "query": [], "session": {"authtoken": "tok"}, "payload": payload}
         response = handler.handle(json.dumps(raw))
         return response["status"], json.loads(response["payload"])
 
@@ -155,7 +158,7 @@ class DispatchAndExceptionMappingTests(unittest.TestCase):
     def test_unsupported_method_returns_405(self):
         handler = _ProbeHandler()
         handler.behavior = lambda req: {"ok": True}
-        raw = {"method": "PATCH", "path": "", "query": [], "session": {}, "payload": None}
+        raw = {"method": "PATCH", "path_info": "", "query": [], "session": {}, "payload": None}
         response = handler.handle(json.dumps(raw))
         self.assertEqual(response["status"], 405)
 

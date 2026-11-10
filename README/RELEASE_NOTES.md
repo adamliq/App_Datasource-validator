@@ -2,19 +2,32 @@
 
 ## 1.0.10 — [DATE]
 
-Fixed a real bug found via live testing, not an environment quirk: Splunk's
-persist-connection loader requires exactly one
-`PersistentServerConnectionApplication` subclass per script file, but
-`bin/rest_validation.py` defined all 8 platform/data-source/run/queue/results
-handlers in one file. Any call to `/datasource_validator/platforms` (or any
-of the other 7 endpoints that file served) failed with "More than one class
-implements PersistentServerConnectionApplication", blocking all
-platform/data-source CRUD and run management. Split it into one handler per
-file (`rest_platforms.py`, `rest_platform.py`, `rest_datasources.py`,
-`rest_datasource.py`, `rest_runs.py`, `rest_run.py`, `rest_queue.py`,
-`rest_results.py`), sharing the model/dict-building helpers through a new
-`bin/app/rest_validation_shared.py` module, and updated `restmap.conf` to
-match. `bin/rest_validation.py` is removed.
+Fixed two real bugs found via live testing against a real Splunk instance,
+not environment quirks - both completely blocked platform/data-source
+creation and management, and neither was caught by AppInspect or the offline
+validator:
+
+1. Splunk's persist-connection loader requires exactly one
+   `PersistentServerConnectionApplication` subclass per script file, but
+   `bin/rest_validation.py` defined all 8 platform/data-source/run/queue/
+   results handlers in one file. Any call to `/datasource_validator/platforms`
+   (or any of the other endpoints that file served) failed with "More than
+   one class implements PersistentServerConnectionApplication". Split into
+   `rest_platforms.py`, `rest_datasources.py`, `rest_runs.py`, `rest_queue.py`,
+   and `rest_results.py`, sharing model/dict-building helpers through a new
+   `bin/app/rest_validation_shared.py` module. `bin/rest_validation.py` is
+   removed.
+2. Once (1) was fixed, every collection-level request (e.g. a bare
+   `GET /platforms`) was still failing with "platform_id is required in the
+   URL path" - Splunk's REST dispatcher does not disambiguate a bare restmap
+   `match` (`/datasource_validator/platforms`) from a second, trailing-slash
+   `match` for the single-item path (`/datasource_validator/platforms/`)
+   registered for the same handler pair; every request, with or without an
+   id, was landing on the item-only handler. Fixed by merging each
+   collection/item pair (`platforms`+`platform`, `datasources`+`datasource`,
+   `run`+`run/<id>`) into one handler class that branches on
+   `request.path_segments`, and removing the now-redundant trailing-slash
+   restmap/web.conf stanzas.
 
 ## 1.0.9 — [DATE]
 

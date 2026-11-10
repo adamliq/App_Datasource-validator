@@ -97,7 +97,7 @@ class DsvQueryTestHandler(rest_base.DsvPersistentHandler):
 
 def _is_admin_payload(payload):
     # The admin leading-command allowlist is a defense-in-depth concept
-    # for saved data sources (see rest_datasources.py / rest_datasource.py,
-    # which check the caller's real capabilities); ad-hoc test queries
-    # never get that relaxation, regardless of what the client sends.
+    # for saved data sources (see rest_datasources.py, which checks the
+    # caller's real capabilities); ad-hoc test queries never get that
+    # relaxation, regardless of what the client sends.
     return False
