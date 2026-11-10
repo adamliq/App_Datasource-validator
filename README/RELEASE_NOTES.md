@@ -1,5 +1,35 @@
 # Release Notes — Data Source Validator
 
+## 1.0.9 — [DATE]
+
+Investigated the modular-input registration gap further in Docker, with
+DEBUG-level Splunk logging enabled. Finding: Splunk's `SpecFiles` scanner,
+which is how every *other* modular input in that test environment (all
+Splunk-bundled: `checkapp`, `search_artifacts_helper`,
+`splunk_secure_gateway`'s inputs, etc.) actually gets its scheme registered,
+never once opens this app's `README/inputs.conf.spec` - confirmed by its
+complete absence from a full-verbosity log capture that repeatedly scanned
+every bundled app's equivalent file. Ruled out, each tested directly: the
+worker script's executable bit, `disabled`/`is_configured` state, a live
+app reinstall, and a true container first-boot with the app present from
+creation. This points at a restriction on third-party/customer-installed
+apps specifically in that test image/version, not at anything fixable in
+this app's own packaging - still unconfirmed either way against real
+Splunk Cloud infrastructure, which is different from the Docker sandbox
+used here.
+
+Two real, concrete things came out of the investigation regardless:
+- Added `README/inputs.conf.spec`, documenting the `dsv_validation_worker`
+  input - standard practice, harmless either way, and it is what let
+  AppInspect itself recognize this as a modular input for the first time
+  (previously true for `restmap.conf`'s script stanzas only).
+- That recognition surfaced a real AppInspect failure
+  (`check_inputs_conf_spec_stanzas_has_python_version_property`):
+  `python.version` must be declared on the modular input's *scheme-level*
+  stanza (`[dsv_validation_worker]`, not just the `://main` instance
+  stanza). Added, alongside `python.required`, matching the convention
+  already used in `restmap.conf`.
+
 ## 1.0.8 — [DATE]
 
 Found and fixed by driving the setup page's actual save flow end-to-end
