@@ -286,11 +286,19 @@ require([
     }
 
     function loadHome(root) {
+        // restGet()'s deferred resolves with a single value (the already-
+        // parsed body), not jQuery.ajax()'s native (data, textStatus,
+        // jqXHR) triple - so with two restGet() calls, $.when's combined
+        // done callback hands each one's resolved value straight through
+        // as platformsResp/datasourcesResp, not wrapped in an array.
+        // Confirmed live: indexing platformsResp[0] (a jQuery.ajax idiom)
+        // always read undefined here, silently rendering an empty table
+        // even with real platforms/data sources present.
         $.when(
             restGet('datasource_validator/platforms'),
             restGet('datasource_validator/datasources')
         ).done(function (platformsResp, datasourcesResp) {
-            renderHome(root, (platformsResp[0] || {}).platforms || [], (datasourcesResp[0] || {}).datasources || []);
+            renderHome(root, (platformsResp || {}).platforms || [], (datasourcesResp || {}).datasources || []);
         }).fail(function (err) {
             console.error('[dsv]', err);
             root.innerHTML = '';

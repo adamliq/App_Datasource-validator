@@ -47,6 +47,17 @@ AppInspect or the offline validator:
    NOT usable for this - it's remapped to internal command names (e.g.
    `prehead`) with extra `| fields ...` stages appended. Fixed
    `_extract_normalized_search()` to recognize `eventsSearch`.
+5. The home page's status table rendered empty even with real platforms
+   and data sources configured. `restGet()`'s deferred resolves with a
+   single value (the already-parsed REST response body), but
+   `loadHome()`'s `$.when(...).done(function (platformsResp,
+   datasourcesResp) {...})` indexed `platformsResp[0]` - a jQuery.ajax()
+   idiom for a 3-argument `(data, textStatus, jqXHR)` resolution that
+   `restGet()` never produces. That index was always `undefined`, so the
+   table silently rendered with zero rows regardless of real data.
+   Confirmed live with a real Splunk instance and 2 platforms / 3 data
+   sources configured. Fixed by reading `platformsResp`/`datasourcesResp`
+   directly.
 
 ## 1.0.9 — [DATE]
 
