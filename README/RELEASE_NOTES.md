@@ -40,6 +40,13 @@ AppInspect or the offline validator:
    it requires `POST` with `q` in the form body. Every data source create/
    update was failing before it could even validate the query. Fixed in
    `SplunkRestSearchParser.parse()`.
+4. Once (3) was fixed, every query still parsed as "ambiguous" - the real
+   response has no `entry`/`content` wrapper and no top-level `search` key;
+   it's a flat dict whose `eventsSearch` field holds the normalized
+   pipeline (e.g. `"search index=main | head 1"`). `normalizedSearch` is
+   NOT usable for this - it's remapped to internal command names (e.g.
+   `prehead`) with extra `| fields ...` stages appended. Fixed
+   `_extract_normalized_search()` to recognize `eventsSearch`.
 
 ## 1.0.9 — [DATE]
 

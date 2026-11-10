@@ -35,6 +35,15 @@ class ExtractNormalizedSearchTests(unittest.TestCase):
         body = {"search": "search index=main"}
         self.assertEqual(_extract_normalized_search(body), "search index=main")
 
+    def test_extracts_from_events_search(self):
+        # The actual flat (no "entry" wrapper) shape this endpoint returns
+        # on a real Splunk instance.
+        body = {
+            "normalizedSearch": 'litsearch index=main | fields keepcolorder=t "_bkt"',
+            "eventsSearch": "search index=main | head 1",
+        }
+        self.assertEqual(_extract_normalized_search(body), "search index=main | head 1")
+
     def test_returns_none_when_nothing_recognizable(self):
         self.assertIsNone(_extract_normalized_search({"unexpected": "shape"}))
         self.assertIsNone(_extract_normalized_search("not even a dict"))

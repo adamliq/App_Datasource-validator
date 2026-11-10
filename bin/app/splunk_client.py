@@ -362,6 +362,15 @@ def _extract_normalized_search(body):
         normalized = content.get("search") or content.get("eai:search")
         if isinstance(normalized, str) and normalized.strip():
             return normalized
+    # Confirmed live: this Splunk version's search/parser response has no
+    # "entry" wrapper - it's a flat dict whose "eventsSearch" field is the
+    # normalized pipeline using the original (non-macro-expanded) command
+    # names, e.g. "search index=_internal | head 1". "normalizedSearch" is
+    # NOT usable here - it's remapped to internal command names (e.g.
+    # "prehead") and has extra "| fields ..." stages appended.
+    events_search = body.get("eventsSearch")
+    if isinstance(events_search, str) and events_search.strip():
+        return events_search
     # Some Splunk versions return the parsed search at the top level.
     top_level = body.get("search")
     if isinstance(top_level, str) and top_level.strip():
