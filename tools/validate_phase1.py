@@ -162,11 +162,19 @@ REQUIRED_FILES = [
     "bin/search_executor.py",
     "bin/validation_controller.py",
     "bin/rest_config.py",
-    "bin/rest_validation.py",
+    "bin/rest_platforms.py",
+    "bin/rest_platform.py",
+    "bin/rest_datasources.py",
+    "bin/rest_datasource.py",
+    "bin/rest_runs.py",
+    "bin/rest_run.py",
+    "bin/rest_queue.py",
+    "bin/rest_results.py",
     "bin/rest_query.py",
     "bin/rest_health.py",
     "bin/app/splunk_client.py",
     "bin/app/rest_base.py",
+    "bin/app/rest_validation_shared.py",
 ]
 
 

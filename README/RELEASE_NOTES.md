@@ -1,5 +1,21 @@
 # Release Notes — Data Source Validator
 
+## 1.0.10 — [DATE]
+
+Fixed a real bug found via live testing, not an environment quirk: Splunk's
+persist-connection loader requires exactly one
+`PersistentServerConnectionApplication` subclass per script file, but
+`bin/rest_validation.py` defined all 8 platform/data-source/run/queue/results
+handlers in one file. Any call to `/datasource_validator/platforms` (or any
+of the other 7 endpoints that file served) failed with "More than one class
+implements PersistentServerConnectionApplication", blocking all
+platform/data-source CRUD and run management. Split it into one handler per
+file (`rest_platforms.py`, `rest_platform.py`, `rest_datasources.py`,
+`rest_datasource.py`, `rest_runs.py`, `rest_run.py`, `rest_queue.py`,
+`rest_results.py`), sharing the model/dict-building helpers through a new
+`bin/app/rest_validation_shared.py` module, and updated `restmap.conf` to
+match. `bin/rest_validation.py` is removed.
+
 ## 1.0.9 — [DATE]
 
 Investigated the modular-input registration gap further in Docker, with
