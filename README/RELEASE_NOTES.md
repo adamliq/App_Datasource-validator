@@ -2,10 +2,10 @@
 
 ## 1.0.10 — [DATE]
 
-Fixed two real bugs found via live testing against a real Splunk instance,
-not environment quirks - both completely blocked platform/data-source
-creation and management, and neither was caught by AppInspect or the offline
-validator:
+Fixed three real bugs found via live testing against a real Splunk
+instance, not environment quirks - all three completely blocked
+platform/data-source creation and management, and none was caught by
+AppInspect or the offline validator:
 
 1. Splunk's persist-connection loader requires exactly one
    `PersistentServerConnectionApplication` subclass per script file, but
@@ -17,17 +17,29 @@ validator:
    and `rest_results.py`, sharing model/dict-building helpers through a new
    `bin/app/rest_validation_shared.py` module. `bin/rest_validation.py` is
    removed.
-2. Once (1) was fixed, every collection-level request (e.g. a bare
-   `GET /platforms`) was still failing with "platform_id is required in the
-   URL path" - Splunk's REST dispatcher does not disambiguate a bare restmap
-   `match` (`/datasource_validator/platforms`) from a second, trailing-slash
-   `match` for the single-item path (`/datasource_validator/platforms/`)
-   registered for the same handler pair; every request, with or without an
-   id, was landing on the item-only handler. Fixed by merging each
-   collection/item pair (`platforms`+`platform`, `datasources`+`datasource`,
-   `run`+`run/<id>`) into one handler class that branches on
-   `request.path_segments`, and removing the now-redundant trailing-slash
-   restmap/web.conf stanzas.
+2. `RestRequest` read the id/path remainder after a restmap `match` prefix
+   from `raw.get("path")`, but Splunk's persist-connection protocol actually
+   sends it as `raw.get("path_info")` - confirmed by logging the raw request
+   dict Splunk hands the script. Every item-level request (GET/PUT/POST/
+   DELETE on `/platforms/<id>`, `/datasources/<id>`, `/run/<id>`) has always
+   seen an empty `path_segments`, in every released version of this app.
+   Separately, registering a second restmap stanza with a trailing-slash
+   `match` for the single-item handler, alongside a bare-prefix stanza for
+   the collection handler, doesn't disambiguate requests between them the
+   way that two-stanza split assumed - every request for that resource,
+   collection or item, was landing on the item handler regardless. Fixed
+   both by reading the right key and merging each collection/item pair
+   (`platforms`+`platform`, `datasources`+`datasource`, `run`+`run/<id>`)
+   into one handler class that branches on `request.path_segments`, under
+   one restmap/web.conf stanza per resource.
+3. `/services/search/parser` - used to validate a data source's SPL query
+   on every create/update - rejected the app's `GET` request with
+   `405 The method is not allowed`. This was a known unverified risk
+   (flagged in `HANDOFF.md` since this endpoint's wire format couldn't be
+   checked against a live instance earlier in the project), now confirmed:
+   it requires `POST` with `q` in the form body. Every data source create/
+   update was failing before it could even validate the query. Fixed in
+   `SplunkRestSearchParser.parse()`.
 
 ## 1.0.9 — [DATE]
 

@@ -87,6 +87,19 @@ class SplunkRestSearchParserTests(unittest.TestCase):
         self.assertEqual(result.leading_command, "search")
         self.assertIn("stats", result.main_pipeline_commands)
 
+    def test_parse_calls_search_parser_with_post_and_q_in_body(self):
+        # Confirmed live against a real Splunk instance: /services/search/
+        # parser returns 405 "The method is not allowed" on GET - it must
+        # be called as POST with q in the form body, not the query string.
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        response_body = {"entry": [{"content": {"search": "search index=main"}}]}
+        with patch("app.splunk_client.request", return_value=(response_body, 200)) as mock_request:
+            parser.parse("index=main")
+        call_args = mock_request.call_args
+        self.assertEqual(call_args.kwargs.get("method"), "POST")
+        self.assertEqual(call_args.kwargs.get("postargs"), {"q": "index=main"})
+        self.assertIsNone(call_args.kwargs.get("getargs"))
+
     def test_parse_marks_ambiguous_on_unrecognized_shape(self):
         parser = SplunkRestSearchParser(session_key="fake-key")
         with patch("app.splunk_client.request", return_value=({"nothing": "useful"}, 200)):

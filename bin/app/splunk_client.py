@@ -11,12 +11,11 @@ rest of bin/app/* was written against in Phase 2 (models/base.py's Store
 protocol, security.py's storage_passwords protocol,
 query_validator.SearchParser), so the business logic already has full
 unit test coverage against fakes and this module only needs to be
-correct about the wire format - see HANDOFF.md's "Verify in your
-environment" note: the exact JSON shape of a couple of these endpoints
-(most notably /services/search/parser) could not be checked against a
-live Splunk instance while this was written, so SplunkRestSearchParser
-fails closed (marks the parse ambiguous) if the response doesn't look
-like what's expected, rather than guessing.
+correct about the wire format. /services/search/parser's request shape
+was confirmed live against a real Splunk instance: it requires POST
+with `q` in the form body (GET returns 405). SplunkRestSearchParser
+still fails closed (marks the parse ambiguous) if a response ever
+doesn't look like what's expected, rather than guessing.
 """
 import json
 import time
@@ -323,7 +322,10 @@ class SplunkRestSearchParser(SearchParser):
 
     def parse(self, spl_query):
         try:
-            body, _ = request(self._session_key, self._path, method="GET", getargs={"q": spl_query})
+            # Confirmed live against a real Splunk instance: this endpoint
+            # rejects GET with 405 "The method is not allowed" - it must be
+            # POST, with q in the form body rather than the query string.
+            body, _ = request(self._session_key, self._path, method="POST", postargs={"q": spl_query})
         except SplunkRestError as e:
             raise ParserUnavailableError(str(e))
 
