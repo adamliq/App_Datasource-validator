@@ -495,6 +495,23 @@ def _split_top_level(text):
 # Search job dispatch/poll -> used by bin/search_executor.py.
 # ---------------------------------------------------------------------------
 
+def _as_search_command(executable_query):
+    """
+    /services/search/jobs's `search` arg must be a full search command
+    (starting with "search" or "|"), not a bare filter expression - but
+    the stored query is normally already a full "search ..." pipeline
+    (query_validator.py passes it through as-is). Confirmed live: always
+    prepending "search " regardless produced "search search index=main
+    ..." for an already-prefixed query, which Splunk parses as searching
+    for the literal term "search" - every validation failed with zero
+    results even against indexes/data the service account could read.
+    """
+    stripped = executable_query.strip()
+    if stripped.startswith("|") or stripped.lower().startswith("search"):
+        return executable_query
+    return f"search {executable_query}"
+
+
 class SearchJobClient:
     def __init__(self, session_key, app=APP_NAME, owner=DEFAULT_OWNER):
         self._session_key = session_key
@@ -502,7 +519,7 @@ class SearchJobClient:
 
     def dispatch(self, executable_query, earliest_time, latest_time, max_time_sec):
         postargs = {
-            "search": executable_query if executable_query.strip().startswith("|") else f"search {executable_query}",
+            "search": _as_search_command(executable_query),
             "earliest_time": earliest_time,
             "latest_time": latest_time,
             "max_time": max_time_sec,

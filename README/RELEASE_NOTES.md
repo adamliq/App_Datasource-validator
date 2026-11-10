@@ -58,6 +58,15 @@ AppInspect or the offline validator:
    Confirmed live with a real Splunk instance and 2 platforms / 3 data
    sources configured. Fixed by reading `platformsResp`/`datasourcesResp`
    directly.
+6. Every validation run failed with "returned zero events", even against
+   data the dispatching account could read when queried directly.
+   `SearchJobClient.dispatch()` unconditionally prepended `"search "` to
+   the executable query unless it started with `|` - but a saved data
+   source's query is already a full `"search ..."` pipeline, so this
+   produced `"search search index=main ..."`, which Splunk parses as
+   searching for the literal term `"search"` rather than running the
+   intended search. Fixed by only prepending when the query doesn't
+   already start with `search` or `|`.
 
 ## 1.0.9 — [DATE]
 
