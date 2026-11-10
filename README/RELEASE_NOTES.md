@@ -67,6 +67,25 @@ AppInspect or the offline validator:
    searching for the literal term `"search"` rather than running the
    intended search. Fixed by only prepending when the query doesn't
    already start with `search` or `|`.
+7. Every single timestamp in the app (last result time, created/updated
+   times, run/queue dispatch and completion times, worker lease
+   acquired/heartbeat/expires times) was silently never persisted to KV
+   Store - confirmed live: the home page always showed "never" under
+   Last Result, and the health page always showed blank
+   Acquired/Last heartbeat/Expires, even immediately after a successful
+   run. Root cause: `default/collections.conf` declared every one of
+   these fields `= time`, but KV Store's `time` field type expects a
+   numeric epoch value, not the ISO-8601 string (`utcnow_iso()`) this
+   app writes everywhere - and with `enforceTypes` defaulting to false,
+   a type-mismatched field is silently dropped rather than rejected, so
+   every other field in the same document still saved fine, masking it.
+   Nothing in this app relies on KV Store's own numeric time comparison
+   or range queries (every comparison/staleness check happens in Python
+   via `parse_iso()`), so fixed by declaring these fields `string`
+   instead - ISO-8601 UTC timestamps in this app's fixed, zero-padded
+   format sort identically whether compared as strings or as real
+   timestamps, so the existing `sort="-created_time"` etc. KV Store
+   queries are unaffected.
 
 ## 1.0.9 — [DATE]
 
