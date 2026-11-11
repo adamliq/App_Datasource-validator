@@ -22,9 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import rest_base  # noqa: E402
+from app import security  # noqa: E402
 from app.models.base import NotFoundError  # noqa: E402
 from app.rest_validation_shared import (  # noqa: E402
     PLATFORM_UPDATE_FIELDS,
+    clean_metadata,
     default_stale_threshold,
     platform_dict,
     stores,
@@ -73,7 +75,7 @@ class DsvPlatformsHandler(rest_base.DsvPersistentHandler):
 
         if request.path_segments:
             platform_id = self._platform_id(request)
-            fields = {k: v for k, v in payload.items() if k in PLATFORM_UPDATE_FIELDS}
+            fields = clean_metadata(payload, PLATFORM_UPDATE_FIELDS)
             platform = st.platform_store.update(platform_id, **fields)
             threshold = default_stale_threshold(request.session_key)
             children = [
@@ -82,12 +84,18 @@ class DsvPlatformsHandler(rest_base.DsvPersistentHandler):
             ]
             return platform_dict(platform, children)
 
+        platform_id = payload.get("platform_id")
+        security.validate_identifier(platform_id or "", "platform_id")
+        if st.platform_store.get(platform_id) is not None:
+            raise ValueError(f"a platform with the id {platform_id} already exists")
+
+        fields = clean_metadata(payload, PLATFORM_UPDATE_FIELDS)
         platform = st.platform_store.create(
-            platform_id=payload.get("platform_id"),
-            name=payload.get("name"),
-            description=payload.get("description", ""),
-            sort_order=payload.get("sort_order", 0),
-            enabled=payload.get("enabled", True),
+            platform_id=platform_id,
+            name=fields.get("name"),
+            description=fields.get("description", ""),
+            sort_order=fields.get("sort_order", 0),
+            enabled=fields.get("enabled", True),
         )
         return platform_dict(platform, []), 201
 

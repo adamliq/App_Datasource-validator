@@ -19,7 +19,7 @@ from app.splunk_client import (  # noqa: E402
     _split_top_level,
     _tokenize_pipeline,
 )
-from app.query_validator import ParserUnavailableError  # noqa: E402
+from app.query_validator import ParserUnavailableError, SearchRejectedError  # noqa: E402
 
 
 class ExtractNormalizedSearchTests(unittest.TestCase):
@@ -118,6 +118,26 @@ class SplunkRestSearchParserTests(unittest.TestCase):
     def test_parse_raises_parser_unavailable_on_rest_error(self):
         parser = SplunkRestSearchParser(session_key="fake-key")
         with patch("app.splunk_client.request", side_effect=SplunkRestError("connection refused")):
+            with self.assertRaises(ParserUnavailableError):
+                parser.parse("index=main")
+
+    def test_parse_reports_a_400_as_the_search_being_refused(self):
+        # The real shape of a parser refusal: HTTP 400 with a splunkd
+        # messages body, delivered as bytes.
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        error = SplunkRestError(
+            "POST /services/search/parser returned status 400", status=400,
+            body=b'{"messages":[{"type":"FATAL","text":"Unknown search command \'serach\'."}]}',
+        )
+        with patch("app.splunk_client.request", side_effect=error):
+            with self.assertRaises(SearchRejectedError) as ctx:
+                parser.parse("serach index=main")
+        self.assertEqual(str(ctx.exception), "Unknown search command 'serach'.")
+
+    def test_parse_treats_other_statuses_as_parser_unavailable(self):
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        error = SplunkRestError("POST ... returned status 503", status=503, body=b"{}")
+        with patch("app.splunk_client.request", side_effect=error):
             with self.assertRaises(ParserUnavailableError):
                 parser.parse("index=main")
 

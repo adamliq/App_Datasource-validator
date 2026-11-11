@@ -30,9 +30,10 @@ DEFAULT_OWNER = "nobody"
 
 
 class SplunkRestError(Exception):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, body=None):
         super().__init__(message)
         self.status = status
+        self.body = body
 
 
 def _require_rest_module():
@@ -75,7 +76,9 @@ def request(session_key, path, method="GET", getargs=None, postargs=None, raise_
 
     status = getattr(server_response, "status", None)
     if raise_on_error and (status is None or status >= 300):
-        raise SplunkRestError(f"{method} {path} returned status {status}: {server_content!r}", status=status)
+        raise SplunkRestError(
+            f"{method} {path} returned status {status}: {server_content!r}", status=status, body=server_content,
+        )
 
     if not server_content:
         return {}, status
@@ -302,7 +305,12 @@ class ServiceHandle:
 # /services/search/parser adapter -> implements query_validator.SearchParser.
 # ---------------------------------------------------------------------------
 
-from app.query_validator import ParsedSearch, ParserUnavailableError, SearchParser  # noqa: E402
+from app.query_validator import (  # noqa: E402
+    ParsedSearch,
+    ParserUnavailableError,
+    SearchParser,
+    SearchRejectedError,
+)
 
 
 class SplunkRestSearchParser(SearchParser):
@@ -327,6 +335,11 @@ class SplunkRestSearchParser(SearchParser):
             # POST, with q in the form body rather than the query string.
             body, _ = request(self._session_key, self._path, method="POST", postargs={"q": spl_query})
         except SplunkRestError as e:
+            # A 400 is the parser's verdict on the search itself (confirmed
+            # live: a typo or a forbidden command comes back this way), not
+            # an outage - pass Splunk's own explanation on to the user.
+            if e.status == 400:
+                raise SearchRejectedError(_response_messages(e.body) or str(e))
             raise ParserUnavailableError(str(e))
 
         normalized = _extract_normalized_search(body)
@@ -351,6 +364,21 @@ class SplunkRestSearchParser(SearchParser):
             main_pipeline_commands=main_commands,
             all_commands=all_commands,
         )
+
+
+def _response_messages(body):
+    """Joins the text of a splunkd {"messages": [...]} error body, or ''."""
+    if isinstance(body, (bytes, bytearray)):
+        body = body.decode("utf-8", errors="replace")
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except ValueError:
+            return ""
+    if not isinstance(body, dict):
+        return ""
+    texts = [m.get("text") for m in body.get("messages") or [] if isinstance(m, dict) and m.get("text")]
+    return "; ".join(texts)
 
 
 def _extract_normalized_search(body):

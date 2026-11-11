@@ -38,6 +38,60 @@ PLATFORM_UPDATE_FIELDS = {"name", "description", "sort_order", "enabled"}
 DATASOURCE_METADATA_FIELDS = {"name", "description", "sort_order", "enabled", "stale_threshold_sec"}
 
 
+_TRUE_STRINGS = {"true", "1", "yes", "on"}
+_FALSE_STRINGS = {"false", "0", "no", "off"}
+
+
+def _to_bool(value, field_name):
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in _TRUE_STRINGS:
+        return True
+    if text in _FALSE_STRINGS:
+        return False
+    raise ValueError(f"{field_name} must be true or false")
+
+
+def _to_int(value, field_name, minimum):
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a whole number")
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a whole number")
+    if number < minimum:
+        raise ValueError(f"{field_name} must be at least {minimum}")
+    return number
+
+
+def clean_metadata(payload, allowed_fields):
+    """
+    Picks the allowed metadata fields out of a request body and converts
+    them to their real types. A form-encoded body (what the app's own UI
+    and curl -d send) delivers every value as text, so without this
+    "enabled=false" was stored as a truthy string. An empty
+    stale_threshold_sec means "use the app default" and becomes None.
+    """
+    fields = {}
+    for key in allowed_fields:
+        if key not in payload:
+            continue
+        value = payload[key]
+        if key == "enabled":
+            value = _to_bool(value, key)
+        elif key == "sort_order":
+            value = _to_int(value, key, minimum=0)
+        elif key == "stale_threshold_sec":
+            value = None if value in (None, "") else _to_int(value, key, minimum=1)
+        elif key == "name":
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("name must not be empty")
+            value = value.strip()
+        fields[key] = value
+    return fields
+
+
 def stores(session_key):
     return Stores(
         platform_store=PlatformStore(kv_store(session_key, PlatformStore.collection_name)),

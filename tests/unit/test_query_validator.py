@@ -11,6 +11,7 @@ from app.query_validator import (  # noqa: E402
     ParsedSearch,
     ParserUnavailableError,
     QueryValidator,
+    SearchRejectedError,
     compute_query_hash,
 )
 
@@ -133,6 +134,14 @@ class ParserFailureTests(unittest.TestCase):
         result = make_validator(parser).validate(q)
         self.assertFalse(result.allowed)
         self.assertIn("unavailable", result.reason)
+
+    def test_search_refused_by_the_platform_reports_its_wording(self):
+        parser = FakeSearchParser()
+        q = "serach index=main"
+        parser.stub(q, SearchRejectedError("Unknown search command 'serach'."))
+        result = make_validator(parser).validate(q)
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.reason, "Splunk refused this search: Unknown search command 'serach'.")
 
     def test_unexpected_parser_exception_rejects(self):
         parser = FakeSearchParser()

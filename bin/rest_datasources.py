@@ -21,6 +21,7 @@ from app import security  # noqa: E402
 from app.models.base import NotFoundError  # noqa: E402
 from app.rest_validation_shared import (  # noqa: E402
     DATASOURCE_METADATA_FIELDS,
+    clean_metadata,
     datasource_dict,
     default_stale_threshold,
     is_admin,
@@ -59,14 +60,19 @@ class DsvDatasourcesHandler(rest_base.DsvPersistentHandler):
 
         if request.path_segments:
             datasource_id = self._datasource_id(request)
-            if st.datasource_store.get(datasource_id) is None:
+            existing = st.datasource_store.get(datasource_id)
+            if existing is None:
                 raise NotFoundError(f"no such data source: {datasource_id}")
 
-            if "spl_query" in payload and payload["spl_query"]:
-                validate_query_or_raise(request.session_key, payload["spl_query"], is_admin(request.session_key))
-                st.datasource_store.update_query(datasource_id, payload["spl_query"])
+            metadata_fields = clean_metadata(payload, DATASOURCE_METADATA_FIELDS)
 
-            metadata_fields = {k: v for k, v in payload.items() if k in DATASOURCE_METADATA_FIELDS}
+            # Re-saving an unchanged query must not reset the data source
+            # to NOT RUN, which is what update_query() does by design.
+            new_query = payload.get("spl_query")
+            if new_query and new_query != existing.spl_query:
+                validate_query_or_raise(request.session_key, new_query, is_admin(request.session_key))
+                st.datasource_store.update_query(datasource_id, new_query)
+
             if metadata_fields:
                 st.datasource_store.update_metadata(datasource_id, **metadata_fields)
 
@@ -84,15 +90,21 @@ class DsvDatasourcesHandler(rest_base.DsvPersistentHandler):
         if st.platform_store.get(platform_id) is None:
             raise NotFoundError(f"no such platform: {platform_id}")
 
+        datasource_id = payload.get("datasource_id")
+        security.validate_identifier(datasource_id or "", "datasource_id")
+        if st.datasource_store.get(datasource_id) is not None:
+            raise ValueError(f"a data source with the id {datasource_id} already exists")
+
+        fields = clean_metadata(payload, DATASOURCE_METADATA_FIELDS)
         ds = st.datasource_store.create(
-            datasource_id=payload.get("datasource_id"),
+            datasource_id=datasource_id,
             platform_id=platform_id,
-            name=payload.get("name"),
+            name=fields.get("name"),
             spl_query=spl_query,
-            description=payload.get("description", ""),
-            sort_order=payload.get("sort_order", 0),
-            enabled=payload.get("enabled", True),
-            stale_threshold_sec=payload.get("stale_threshold_sec"),
+            description=fields.get("description", ""),
+            sort_order=fields.get("sort_order", 0),
+            enabled=fields.get("enabled", True),
+            stale_threshold_sec=fields.get("stale_threshold_sec"),
         )
         threshold = default_stale_threshold(request.session_key)
         return datasource_dict(ds, threshold), 201

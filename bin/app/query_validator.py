@@ -127,6 +127,12 @@ class ParserUnavailableError(Exception):
     could not be reached or returned an unusable response."""
 
 
+class SearchRejectedError(Exception):
+    """Raised by a SearchParser implementation when the platform parsed the
+    search and refused it (a syntax error, an unknown command, a command
+    the caller may not run). The message is the platform's own wording."""
+
+
 class SearchParser:
     """
     Protocol for anything that can turn an SPL string into a ParsedSearch.
@@ -195,6 +201,12 @@ class QueryValidator:
 
         try:
             parsed = self._parser.parse(query)
+        except SearchRejectedError as e:
+            return QueryValidationResult(
+                allowed=False,
+                reason=f"Splunk refused this search: {e}",
+                normalized_query=query, executable_query=query,
+            )
         except ParserUnavailableError as e:
             return QueryValidationResult(
                 allowed=False,
