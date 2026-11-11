@@ -2,9 +2,9 @@
 
 ## 1.0.10 — [DATE]
 
-Fixed three real bugs found via live testing against a real Splunk
-instance, not environment quirks - all three completely blocked
-platform/data-source creation and management, and none was caught by
+Fixed eight real bugs found via live testing against a real Splunk
+instance, not environment quirks. The first six completely blocked
+platform and data source management or validation runs, and none was caught by
 AppInspect or the offline validator:
 
 1. Splunk's persist-connection loader requires exactly one
@@ -89,6 +89,11 @@ AppInspect or the offline validator:
    their missing timestamps until they are next written; the worker
    lease now backfills its own `acquired_time` on the next renewal
    rather than carrying the blank forward.
+8. With timestamps persisting, staleness detection started working and
+   exposed a display bug: a stale result was labelled
+   "Pass (Stale) (Stale)". The REST response's `status_label` already
+   carries the suffix and `app.js` appended a second one. Removed the
+   client-side copy.
 
 ## 1.0.9 — [DATE]
 

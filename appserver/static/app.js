@@ -352,7 +352,7 @@ require([
             (byPlatform[platform.platform_id] || []).forEach(function (ds) {
                 tbody.appendChild(el('tr', { class: 'dsv-datasource-row' }, [
                     el('td', { text: ' ' + ds.name }),
-                    el('td', {}, [statusBadge(ds.status, ds.status_label + (ds.status_stale ? ' (Stale)' : ''))]),
+                    el('td', {}, [statusBadge(ds.status, ds.status_label)]),
                     el('td', { text: ds.last_result_time || 'never' }),
                     el('td')
                 ]));
