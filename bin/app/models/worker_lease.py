@@ -77,10 +77,14 @@ class WorkerLeaseStore(Store):
             return None
 
         expires = _add_seconds(now_iso, ttl_seconds)
+        # A lease written before 1.0.10 has no acquired_time at all (KV Store
+        # silently dropped it), so a same-owner renewal must not carry that
+        # blank forward forever.
+        renewing = existing is not None and existing.owner == owner and existing.acquired_time
         lease = WorkerLease(
             lease_id=LEASE_ID,
             owner=owner,
-            acquired_time=now_iso if existing is None or existing.owner != owner else existing.acquired_time,
+            acquired_time=existing.acquired_time if renewing else now_iso,
             heartbeat_time=now_iso,
             expires_time=expires,
         )

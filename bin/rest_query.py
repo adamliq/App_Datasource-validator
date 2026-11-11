@@ -16,9 +16,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# rest_base imported as a module, not `from app.rest_base import
+# DsvPersistentHandler` - see bin/rest_config.py's import comment for why
+# (a direct import breaks Splunk's persist-connection loader).
+from app import rest_base  # noqa: E402
 from app import security  # noqa: E402
 from app.query_validator import QueryValidator  # noqa: E402
-from app.rest_base import DsvPersistentHandler  # noqa: E402
 from app.splunk_client import (  # noqa: E402
     SearchJobClient,
     ServiceHandle,
@@ -33,7 +36,7 @@ MAX_WAIT_SEC = 25
 TEST_MAX_TIME_SEC = 30
 
 
-class DsvQueryTestHandler(DsvPersistentHandler):
+class DsvQueryTestHandler(rest_base.DsvPersistentHandler):
     def handle_post(self, request):
         payload = request.payload or {}
         spl_query = payload.get("spl_query")
@@ -94,7 +97,7 @@ class DsvQueryTestHandler(DsvPersistentHandler):
 
 def _is_admin_payload(payload):
     # The admin leading-command allowlist is a defense-in-depth concept
-    # for saved data sources (see rest_validation.py, which checks the
+    # for saved data sources (see rest_datasources.py, which checks the
     # caller's real capabilities); ad-hoc test queries never get that
     # relaxation, regardless of what the client sends.
     return False

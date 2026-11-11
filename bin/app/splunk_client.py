@@ -11,12 +11,11 @@ rest of bin/app/* was written against in Phase 2 (models/base.py's Store
 protocol, security.py's storage_passwords protocol,
 query_validator.SearchParser), so the business logic already has full
 unit test coverage against fakes and this module only needs to be
-correct about the wire format - see HANDOFF.md's "Verify in your
-environment" note: the exact JSON shape of a couple of these endpoints
-(most notably /services/search/parser) could not be checked against a
-live Splunk instance while this was written, so SplunkRestSearchParser
-fails closed (marks the parse ambiguous) if the response doesn't look
-like what's expected, rather than guessing.
+correct about the wire format. /services/search/parser's request shape
+was confirmed live against a real Splunk instance: it requires POST
+with `q` in the form body (GET returns 405). SplunkRestSearchParser
+still fails closed (marks the parse ambiguous) if a response ever
+doesn't look like what's expected, rather than guessing.
 """
 import json
 import time
@@ -31,9 +30,10 @@ DEFAULT_OWNER = "nobody"
 
 
 class SplunkRestError(Exception):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, body=None):
         super().__init__(message)
         self.status = status
+        self.body = body
 
 
 def _require_rest_module():
@@ -63,11 +63,22 @@ def request(session_key, path, method="GET", getargs=None, postargs=None, raise_
             raiseAllErrors=False,
         )
     except Exception as e:
-        raise SplunkRestError(f"request to {path} failed: {e}")
+        # splunk.rest.simpleRequest raises (e.g. splunk.ResourceNotFound for
+        # a 404) for some conditions even with raiseAllErrors=False - most
+        # notably a GET for a KV Store document that doesn't exist, which
+        # every caller of this module treats as a normal, expected outcome
+        # (see KVCollectionClient.get()'s 404 -> None). Confirmed live:
+        # splunk's own REST exceptions carry the real status on
+        # .statusCode; without recovering it here every such exception
+        # loses its status (None) and 404-tolerant callers can never match
+        # it, turning a routine "not found" into an unhandled 500.
+        raise SplunkRestError(f"request to {path} failed: {e}", status=getattr(e, "statusCode", None))
 
     status = getattr(server_response, "status", None)
     if raise_on_error and (status is None or status >= 300):
-        raise SplunkRestError(f"{method} {path} returned status {status}: {server_content!r}", status=status)
+        raise SplunkRestError(
+            f"{method} {path} returned status {status}: {server_content!r}", status=status, body=server_content,
+        )
 
     if not server_content:
         return {}, status
@@ -294,7 +305,12 @@ class ServiceHandle:
 # /services/search/parser adapter -> implements query_validator.SearchParser.
 # ---------------------------------------------------------------------------
 
-from app.query_validator import ParsedSearch, ParserUnavailableError, SearchParser  # noqa: E402
+from app.query_validator import (  # noqa: E402
+    ParsedSearch,
+    ParserUnavailableError,
+    SearchParser,
+    SearchRejectedError,
+)
 
 
 class SplunkRestSearchParser(SearchParser):
@@ -314,8 +330,16 @@ class SplunkRestSearchParser(SearchParser):
 
     def parse(self, spl_query):
         try:
-            body, _ = request(self._session_key, self._path, method="GET", getargs={"q": spl_query})
+            # Confirmed live against a real Splunk instance: this endpoint
+            # rejects GET with 405 "The method is not allowed" - it must be
+            # POST, with q in the form body rather than the query string.
+            body, _ = request(self._session_key, self._path, method="POST", postargs={"q": spl_query})
         except SplunkRestError as e:
+            # A 400 is the parser's verdict on the search itself (confirmed
+            # live: a typo or a forbidden command comes back this way), not
+            # an outage - pass Splunk's own explanation on to the user.
+            if e.status == 400:
+                raise SearchRejectedError(_response_messages(e.body) or str(e))
             raise ParserUnavailableError(str(e))
 
         normalized = _extract_normalized_search(body)
@@ -342,6 +366,21 @@ class SplunkRestSearchParser(SearchParser):
         )
 
 
+def _response_messages(body):
+    """Joins the text of a splunkd {"messages": [...]} error body, or ''."""
+    if isinstance(body, (bytes, bytearray)):
+        body = body.decode("utf-8", errors="replace")
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except ValueError:
+            return ""
+    if not isinstance(body, dict):
+        return ""
+    texts = [m.get("text") for m in body.get("messages") or [] if isinstance(m, dict) and m.get("text")]
+    return "; ".join(texts)
+
+
 def _extract_normalized_search(body):
     if not isinstance(body, dict):
         return None
@@ -351,6 +390,15 @@ def _extract_normalized_search(body):
         normalized = content.get("search") or content.get("eai:search")
         if isinstance(normalized, str) and normalized.strip():
             return normalized
+    # Confirmed live: this Splunk version's search/parser response has no
+    # "entry" wrapper - it's a flat dict whose "eventsSearch" field is the
+    # normalized pipeline using the original (non-macro-expanded) command
+    # names, e.g. "search index=_internal | head 1". "normalizedSearch" is
+    # NOT usable here - it's remapped to internal command names (e.g.
+    # "prehead") and has extra "| fields ..." stages appended.
+    events_search = body.get("eventsSearch")
+    if isinstance(events_search, str) and events_search.strip():
+        return events_search
     # Some Splunk versions return the parsed search at the top level.
     top_level = body.get("search")
     if isinstance(top_level, str) and top_level.strip():
@@ -475,6 +523,23 @@ def _split_top_level(text):
 # Search job dispatch/poll -> used by bin/search_executor.py.
 # ---------------------------------------------------------------------------
 
+def _as_search_command(executable_query):
+    """
+    /services/search/jobs's `search` arg must be a full search command
+    (starting with "search" or "|"), not a bare filter expression - but
+    the stored query is normally already a full "search ..." pipeline
+    (query_validator.py passes it through as-is). Confirmed live: always
+    prepending "search " regardless produced "search search index=main
+    ..." for an already-prefixed query, which Splunk parses as searching
+    for the literal term "search" - every validation failed with zero
+    results even against indexes/data the service account could read.
+    """
+    stripped = executable_query.strip()
+    if stripped.startswith("|") or stripped.lower().startswith("search"):
+        return executable_query
+    return f"search {executable_query}"
+
+
 class SearchJobClient:
     def __init__(self, session_key, app=APP_NAME, owner=DEFAULT_OWNER):
         self._session_key = session_key
@@ -482,7 +547,7 @@ class SearchJobClient:
 
     def dispatch(self, executable_query, earliest_time, latest_time, max_time_sec):
         postargs = {
-            "search": executable_query if executable_query.strip().startswith("|") else f"search {executable_query}",
+            "search": _as_search_command(executable_query),
             "earliest_time": earliest_time,
             "latest_time": latest_time,
             "max_time": max_time_sec,

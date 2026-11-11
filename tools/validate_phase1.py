@@ -155,6 +155,7 @@ REQUIRED_FILES = [
     "default/data/ui/nav/default.xml",
     "default/data/ui/views/setup.xml",
     "default/data/ui/views/home.xml",
+    "default/data/ui/views/manage.xml",
     "default/data/ui/views/health.xml",
     "appserver/static/app.js",
     "appserver/static/app.css",
@@ -162,11 +163,16 @@ REQUIRED_FILES = [
     "bin/search_executor.py",
     "bin/validation_controller.py",
     "bin/rest_config.py",
-    "bin/rest_validation.py",
+    "bin/rest_platforms.py",
+    "bin/rest_datasources.py",
+    "bin/rest_runs.py",
+    "bin/rest_queue.py",
+    "bin/rest_results.py",
     "bin/rest_query.py",
     "bin/rest_health.py",
     "bin/app/splunk_client.py",
     "bin/app/rest_base.py",
+    "bin/app/rest_validation_shared.py",
 ]
 
 
@@ -346,11 +352,20 @@ def check_authorize():
     else:
         ok("default/authorize.conf: 4 capabilities defined")
 
-    if len(roles) != 4:
-        fail(f"default/authorize.conf: expected 4 roles, found "
-             f"{len(roles)}: {roles}")
+    # The app defines exactly 4 of its own roles (dsv_admin/editor/viewer/
+    # service). It may additionally grant its capabilities to built-in
+    # admin roles (role_admin, role_sc_admin - see the "Built-in admin
+    # roles" section of authorize.conf) without redeclaring them, so those
+    # don't count toward this check.
+    dsv_roles = [r for r in roles if r.startswith("role_dsv_")]
+    builtin_admin_grants = sorted(set(roles) - set(dsv_roles))
+
+    if len(dsv_roles) != 4:
+        fail(f"default/authorize.conf: expected 4 dsv_* roles, found "
+             f"{len(dsv_roles)}: {dsv_roles}")
     else:
-        ok("default/authorize.conf: 4 roles defined")
+        suffix = f" (plus built-in admin grants: {builtin_admin_grants})" if builtin_admin_grants else ""
+        ok(f"default/authorize.conf: 4 dsv_* roles defined{suffix}")
 
     cap_names = {c.split("::", 1)[1] for c in capabilities}
 
@@ -443,11 +458,11 @@ def check_restmap(cap_names):
         return None
 
     script_stanzas = [s for s in order if s.startswith("script:")]
-    if len(script_stanzas) != 11:
-        fail(f"default/restmap.conf: expected 11 REST endpoints, found "
+    if len(script_stanzas) != 8:
+        fail(f"default/restmap.conf: expected 8 REST endpoints, found "
              f"{len(script_stanzas)}: {script_stanzas}")
     else:
-        ok("default/restmap.conf: 11 REST endpoints defined")
+        ok("default/restmap.conf: 8 REST endpoints defined")
 
     bad_auth = []
     bad_caps = []

@@ -1,8 +1,8 @@
 /*
  * Data Source Validator - app.js
  *
- * Drives the three custom Simple XML views (setup.xml, home.xml,
- * health.xml) against this app's own REST endpoints (restmap.conf /
+ * Drives the four custom Simple XML views (setup.xml, home.xml,
+ * manage.xml, health.xml) against this app's own REST endpoints (restmap.conf /
  * web.conf). Uses splunkjs/mvc's service object so requests carry the
  * viewer's own Splunk Web session automatically - no hand-rolled auth.
  *
@@ -21,9 +21,37 @@ require([
 ], function ($, mvc) {
     'use strict';
 
-    var service = mvc.createService();
+    // Live report: with mvc.createService() called with no arguments, a POST
+    // was observed going to /servicesNS/<the just-typed service-account
+    // username>/datasource_validator/..., not the logged-in admin's own
+    // session (confirmed - the tester was authenticated as sc_admin, not as
+    // that account) and not `nobody`. All of this app's own KV Store /
+    // storage/passwords config is app-level, not user-private, and the
+    // server side (bin/app/splunk_client.py's DEFAULT_OWNER) already
+    // targets "nobody" for it - pin the client to the same explicit
+    // namespace instead of relying on whatever mvc.createService() resolves
+    // implicitly, which produced the wrong owner at least once.
+    var service = mvc.createService({ owner: 'nobody' });
     var POLL_INTERVAL_MS = 4000;
     var HEALTH_POLL_INTERVAL_MS = 5000;
+
+    // SPECULATIVE FIX (unconfirmed against a live instance): Splunk Web
+    // CSRF-protects state-changing methods (POST/PUT/DELETE) but not GET,
+    // requiring an X-Splunk-Form-Key header sourced from a
+    // splunkweb_csrf_token_<port> cookie. A live report showed exactly
+    // this signature - GET succeeded, POST failed with a bare "Forbidden"
+    // before reaching this app's own REST handler. splunkjs's Service
+    // object exposes no way to attach a custom header through post()/
+    // del() (only the lower-level request() takes one), so this attaches
+    // the header to every jQuery AJAX call on the page instead - additive
+    // only, never removes any protection. If this wasn't the real cause,
+    // it's a no-op: the header is simply ignored when not required.
+    $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+        var match = document.cookie.match(/splunkweb_csrf_token_\d+=([^;]+)/);
+        if (match) {
+            jqXHR.setRequestHeader('X-Splunk-Form-Key', decodeURIComponent(match[1]));
+        }
+    });
 
     function parseResponse(response) {
         var data = response && response.data;
@@ -34,6 +62,13 @@ require([
                 return data.payload;
             }
         }
+        // Some paths through Splunk Web's proxy hand back the persist
+        // handler's payload already parsed into an object rather than as
+        // the JSON string it's normally wrapped in - use it directly
+        // instead of returning the outer {payload: ..., status: ...} shell.
+        if (data && typeof data === 'object' && data.payload && typeof data.payload === 'object') {
+            return data.payload;
+        }
         if (typeof data === 'string') {
             try {
                 return JSON.parse(data);
@@ -42,6 +77,32 @@ require([
             }
         }
         return data;
+    }
+
+    // Confirmed live: a failed request's `err` from splunkjs looks like
+    // {status: 400, error: "Bad Request", data: '{"error": "<reason>"}'} -
+    // the handler's own JSON body arrives as a *string* under `data`, and
+    // the top-level `error` is only the HTTP status text. So look inside
+    // data/payload first and fall back to the status text last.
+    function extractErrorMessage(obj, depth) {
+        if (typeof obj === 'string') {
+            try { obj = JSON.parse(obj); } catch (e) { return null; }
+        }
+        if (!obj || typeof obj !== 'object' || depth > 4) { return null; }
+
+        var nested = extractErrorMessage(obj.data, depth + 1) || extractErrorMessage(obj.payload, depth + 1);
+        if (nested) { return nested; }
+
+        // Standard splunkd REST error envelope, for errors raised by the
+        // platform before this app's own handler runs (e.g. a 403).
+        if (Array.isArray(obj.messages) && obj.messages.length) {
+            var texts = obj.messages
+                .map(function (m) { return m && (m.text || m.message); })
+                .filter(Boolean);
+            if (texts.length) { return texts.join('; '); }
+        }
+        if (typeof obj.error === 'string' && obj.error) { return obj.error; }
+        return null;
     }
 
     function restGet(path, params) {
@@ -82,13 +143,20 @@ require([
 
     function errorText(err) {
         if (!err) { return 'unknown error'; }
-        if (err.data && err.data.payload) {
-            try {
-                var parsed = JSON.parse(err.data.payload);
-                if (parsed && parsed.error) { return parsed.error; }
-            } catch (e) { /* fall through */ }
+
+        var extracted = extractErrorMessage(err, 0);
+        if (extracted) { return extracted; }
+
+        if (err.message) { return err.message; }
+
+        var status = err.status || (err.response && err.response.statusCode);
+        var suffix = status ? ' (HTTP ' + status + ')' : '';
+
+        try {
+            return 'unrecognized error response' + suffix + ': ' + JSON.stringify(err);
+        } catch (e) {
+            return 'unrecognized error response' + suffix;
         }
-        return err.message || String(err);
     }
 
     function el(tag, attrs, children) {
@@ -121,6 +189,7 @@ require([
         restGet('datasource_validator/config').done(function (config) {
             renderSetupForm(root, config || {});
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load setup status: ' + errorText(err) }));
             renderSetupForm(root, {});
@@ -167,10 +236,16 @@ require([
                 default_stale_threshold_sec: thresholdInput.value,
                 default_dispatch_timeout_sec: timeoutInput.value
             }).done(function (result) {
-                message.textContent = 'Saved. The validation worker is now enabled.';
-                message.className = 'dsv-form-message dsv-ok';
+                if (result && result.warning) {
+                    message.textContent = 'Saved with a warning: ' + result.warning;
+                    message.className = 'dsv-form-message dsv-warning';
+                } else {
+                    message.textContent = 'Saved. The validation worker is now enabled.';
+                    message.className = 'dsv-form-message dsv-ok';
+                }
                 passwordInput.value = '';
             }).fail(function (err) {
+                console.error('[dsv]', err);
                 message.textContent = 'Save failed: ' + errorText(err);
                 message.className = 'dsv-form-message dsv-error';
             }).always(function () {
@@ -203,12 +278,21 @@ require([
     }
 
     function loadHome(root) {
+        // restGet()'s deferred resolves with a single value (the already-
+        // parsed body), not jQuery.ajax()'s native (data, textStatus,
+        // jqXHR) triple - so with two restGet() calls, $.when's combined
+        // done callback hands each one's resolved value straight through
+        // as platformsResp/datasourcesResp, not wrapped in an array.
+        // Confirmed live: indexing platformsResp[0] (a jQuery.ajax idiom)
+        // always read undefined here, silently rendering an empty table
+        // even with real platforms/data sources present.
         $.when(
             restGet('datasource_validator/platforms'),
             restGet('datasource_validator/datasources')
         ).done(function (platformsResp, datasourcesResp) {
-            renderHome(root, (platformsResp[0] || {}).platforms || [], (datasourcesResp[0] || {}).datasources || []);
+            renderHome(root, (platformsResp || {}).platforms || [], (datasourcesResp || {}).datasources || []);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load status: ' + errorText(err) }));
         });
@@ -216,6 +300,15 @@ require([
 
     function renderHome(root, platforms, datasources) {
         root.innerHTML = '';
+
+        if (!platforms.length) {
+            var empty = el('p', { class: 'dsv-empty' });
+            empty.appendChild(document.createTextNode('No platforms are configured yet. Add them on the '));
+            empty.appendChild(el('a', { href: 'manage', text: 'Manage' }));
+            empty.appendChild(document.createTextNode(' page.'));
+            root.appendChild(empty);
+            return;
+        }
 
         var byPlatform = {};
         datasources.forEach(function (ds) {
@@ -260,7 +353,7 @@ require([
             (byPlatform[platform.platform_id] || []).forEach(function (ds) {
                 tbody.appendChild(el('tr', { class: 'dsv-datasource-row' }, [
                     el('td', { text: ' ' + ds.name }),
-                    el('td', {}, [statusBadge(ds.status, ds.status_label + (ds.status_stale ? ' (Stale)' : ''))]),
+                    el('td', {}, [statusBadge(ds.status, ds.status_label)]),
                     el('td', { text: ds.last_result_time || 'never' }),
                     el('td')
                 ]));
@@ -278,6 +371,7 @@ require([
         restPost('datasource_validator/run', payload).done(function (run) {
             pollRun(root, statusEl, run.run_id);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             statusEl.textContent = 'Could not start run: ' + errorText(err);
         });
     }
@@ -302,10 +396,365 @@ require([
                     loadHome(root);
                 }
             }).fail(function (err) {
+                console.error('[dsv]', err);
                 statusEl.textContent = 'Lost track of run status: ' + errorText(err);
             });
         }
         tick();
+    }
+
+    // ------------------------------------------------------------------
+    // Manage view - add / edit / delete platforms and data sources
+    // ------------------------------------------------------------------
+
+    var IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+    function initManage(root) {
+        loadManage(root, null);
+    }
+
+    function loadManage(root, notice) {
+        $.when(
+            restGet('datasource_validator/platforms'),
+            restGet('datasource_validator/datasources')
+        ).done(function (platformsResp, datasourcesResp) {
+            renderManage(
+                root, (platformsResp || {}).platforms || [],
+                (datasourcesResp || {}).datasources || [], notice
+            );
+        }).fail(function (err) {
+            console.error('[dsv]', err);
+            root.innerHTML = '';
+            root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load platforms: ' + errorText(err) }));
+        });
+    }
+
+    function slugify(text) {
+        return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+    }
+
+    function formField(labelText, control, hint) {
+        return el('div', { class: 'dsv-field' }, [
+            el('label', { for: control.id, text: labelText }),
+            control,
+            hint ? el('p', { class: 'dsv-hint', text: hint }) : null
+        ]);
+    }
+
+    function checkboxField(labelText, checkbox) {
+        var label = el('label', { class: 'dsv-checkbox', for: checkbox.id }, [checkbox]);
+        label.appendChild(document.createTextNode(' ' + labelText));
+        return el('div', { class: 'dsv-field' }, [label]);
+    }
+
+    // On create the id follows the name until the user edits it by hand;
+    // an existing record's id is its storage key and cannot change.
+    function linkIdToName(nameInput, idInput, editing) {
+        if (editing) {
+            idInput.disabled = true;
+            return;
+        }
+        var edited = false;
+        idInput.addEventListener('input', function () { edited = true; });
+        nameInput.addEventListener('input', function () {
+            if (!edited) { idInput.value = slugify(nameInput.value); }
+        });
+    }
+
+    function wholeNumber(text, fieldLabel, minimum, blankValue) {
+        var trimmed = String(text).trim();
+        if (trimmed === '') { return { value: blankValue }; }
+        if (!/^\d+$/.test(trimmed) || Number(trimmed) < minimum) {
+            return { error: fieldLabel + ' must be a whole number of at least ' + minimum + '.' };
+        }
+        return { value: trimmed };
+    }
+
+    // Builds the shared form frame. collect() returns {error} or
+    // {path, payload, notice}; a successful save reloads the page.
+    function buildForm(ctx, title, fieldNodes, collect) {
+        var saveButton = el('button', { type: 'submit', class: 'dsv-button', text: 'Save' });
+        var cancelButton = el('button', { type: 'button', class: 'dsv-button dsv-button-secondary', text: 'Cancel' });
+        var message = el('div', { class: 'dsv-form-message', role: 'status' });
+        var form = el('form', { class: 'dsv-form dsv-form-wide dsv-panel', novalidate: 'novalidate' },
+            [el('h3', { text: title })].concat(fieldNodes, [
+                el('div', { class: 'dsv-form-actions' }, [saveButton, cancelButton]),
+                message
+            ]));
+
+        cancelButton.addEventListener('click', ctx.close);
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var request = collect();
+            if (request.error) {
+                message.textContent = request.error;
+                message.className = 'dsv-form-message dsv-error';
+                return;
+            }
+            saveButton.disabled = true;
+            message.textContent = 'Saving…';
+            message.className = 'dsv-form-message';
+            restPost(request.path, request.payload).done(function () {
+                ctx.reload(request.notice);
+            }).fail(function (err) {
+                console.error('[dsv]', err);
+                message.textContent = 'Save failed: ' + errorText(err);
+                message.className = 'dsv-form-message dsv-error';
+                saveButton.disabled = false;
+            });
+        });
+        return form;
+    }
+
+    function buildPlatformForm(ctx, existing) {
+        var editing = !!existing;
+        var nameInput = el('input', { type: 'text', id: 'dsv-platform-name', maxlength: '200' });
+        var idInput = el('input', { type: 'text', id: 'dsv-platform-id', maxlength: '64' });
+        var descriptionInput = el('input', { type: 'text', id: 'dsv-platform-description', maxlength: '1000' });
+        var sortInput = el('input', { type: 'number', id: 'dsv-platform-sort', min: '0', step: '1' });
+        var enabledInput = el('input', { type: 'checkbox', id: 'dsv-platform-enabled' });
+
+        nameInput.value = editing ? existing.name : '';
+        idInput.value = editing ? existing.platform_id : '';
+        descriptionInput.value = editing ? (existing.description || '') : '';
+        sortInput.value = editing ? existing.sort_order : 0;
+        enabledInput.checked = editing ? !!existing.enabled : true;
+        linkIdToName(nameInput, idInput, editing);
+
+        return buildForm(ctx, editing ? 'Edit platform' : 'Add platform', [
+            formField('Name', nameInput),
+            formField('ID', idInput, editing
+                ? 'The ID cannot be changed after the platform is created.'
+                : 'Letters, numbers, underscores and hyphens. Cannot be changed later.'),
+            formField('Description', descriptionInput),
+            formField('Sort order', sortInput, 'Lower numbers are listed first.'),
+            checkboxField('Enabled', enabledInput)
+        ], function () {
+            var name = nameInput.value.trim();
+            var id = idInput.value.trim();
+            var sort = wholeNumber(sortInput.value, 'Sort order', 0, '0');
+            if (!name) { return { error: 'Name is required.' }; }
+            if (sort.error) { return sort; }
+            if (!editing) {
+                if (!IDENTIFIER_RE.test(id)) {
+                    return { error: 'ID is required and may only contain letters, numbers, underscores and hyphens.' };
+                }
+                if (ctx.platforms.some(function (p) { return p.platform_id === id; })) {
+                    return { error: 'A platform with the ID "' + id + '" already exists.' };
+                }
+            }
+            var payload = {
+                name: name,
+                description: descriptionInput.value.trim(),
+                sort_order: sort.value,
+                enabled: enabledInput.checked ? 'true' : 'false'
+            };
+            if (!editing) { payload.platform_id = id; }
+            return {
+                path: 'datasource_validator/platforms' + (editing ? '/' + encodeURIComponent(existing.platform_id) : ''),
+                payload: payload,
+                notice: 'Platform "' + name + '" ' + (editing ? 'saved.' : 'added.')
+            };
+        });
+    }
+
+    function buildDatasourceForm(ctx, existing, presetPlatformId) {
+        var editing = !!existing;
+        var platformSelect = el('select', { id: 'dsv-datasource-platform' });
+        ctx.platforms.forEach(function (p) {
+            platformSelect.appendChild(el('option', { value: p.platform_id, text: p.name }));
+        });
+        var nameInput = el('input', { type: 'text', id: 'dsv-datasource-name', maxlength: '200' });
+        var idInput = el('input', { type: 'text', id: 'dsv-datasource-id', maxlength: '64' });
+        var queryInput = el('textarea', { id: 'dsv-datasource-query', rows: '3', spellcheck: 'false' });
+        var descriptionInput = el('input', { type: 'text', id: 'dsv-datasource-description', maxlength: '1000' });
+        var staleInput = el('input', { type: 'number', id: 'dsv-datasource-stale', min: '1', step: '1' });
+        var sortInput = el('input', { type: 'number', id: 'dsv-datasource-sort', min: '0', step: '1' });
+        var enabledInput = el('input', { type: 'checkbox', id: 'dsv-datasource-enabled' });
+
+        platformSelect.value = editing ? existing.platform_id : (presetPlatformId || platformSelect.value);
+        platformSelect.disabled = editing;
+        nameInput.value = editing ? existing.name : '';
+        idInput.value = editing ? existing.datasource_id : '';
+        queryInput.value = editing ? existing.spl_query : '';
+        descriptionInput.value = editing ? (existing.description || '') : '';
+        staleInput.value = editing && existing.stale_threshold_sec != null ? existing.stale_threshold_sec : '';
+        sortInput.value = editing ? existing.sort_order : 0;
+        enabledInput.checked = editing ? !!existing.enabled : true;
+        linkIdToName(nameInput, idInput, editing);
+
+        return buildForm(ctx, editing ? 'Edit data source' : 'Add data source', [
+            formField('Platform', platformSelect, editing ? 'A data source cannot be moved to another platform.' : null),
+            formField('Name', nameInput),
+            formField('ID', idInput, editing
+                ? 'The ID cannot be changed after the data source is created.'
+                : 'Letters, numbers, underscores and hyphens. Cannot be changed later.'),
+            formField('Search', queryInput,
+                'A search that returns at least one event while the data source is healthy, for example: ' +
+                'search index=main sourcetype=my:sourcetype | head 1. It runs as the validation service ' +
+                'account, so it only sees indexes that account is allowed to search.' +
+                (editing ? ' Changing the search resets the status to Not Run.' : '')),
+            formField('Description', descriptionInput),
+            formField('Staleness threshold (seconds)', staleInput, 'Leave blank to use the app default.'),
+            formField('Sort order', sortInput, 'Lower numbers are listed first within the platform.'),
+            checkboxField('Enabled', enabledInput)
+        ], function () {
+            var name = nameInput.value.trim();
+            var id = idInput.value.trim();
+            var query = queryInput.value.trim();
+            var sort = wholeNumber(sortInput.value, 'Sort order', 0, '0');
+            var stale = wholeNumber(staleInput.value, 'Staleness threshold', 1, '');
+            if (!platformSelect.value) { return { error: 'Choose a platform.' }; }
+            if (!name) { return { error: 'Name is required.' }; }
+            if (!editing) {
+                if (!IDENTIFIER_RE.test(id)) {
+                    return { error: 'ID is required and may only contain letters, numbers, underscores and hyphens.' };
+                }
+                if (ctx.datasources.some(function (d) { return d.datasource_id === id; })) {
+                    return { error: 'A data source with the ID "' + id + '" already exists.' };
+                }
+            }
+            if (!query) { return { error: 'Search is required.' }; }
+            if (stale.error) { return stale; }
+            if (sort.error) { return sort; }
+            var payload = {
+                name: name,
+                spl_query: query,
+                description: descriptionInput.value.trim(),
+                stale_threshold_sec: stale.value,
+                sort_order: sort.value,
+                enabled: enabledInput.checked ? 'true' : 'false'
+            };
+            if (!editing) {
+                payload.datasource_id = id;
+                payload.platform_id = platformSelect.value;
+            }
+            return {
+                path: 'datasource_validator/datasources' + (editing ? '/' + encodeURIComponent(existing.datasource_id) : ''),
+                payload: payload,
+                notice: 'Data source "' + name + '" ' + (editing ? 'saved.' : 'added.')
+            };
+        });
+    }
+
+    function renderManage(root, platforms, datasources, notice) {
+        root.innerHTML = '';
+
+        var byPlatform = {};
+        datasources.forEach(function (ds) {
+            byPlatform[ds.platform_id] = byPlatform[ds.platform_id] || [];
+            byPlatform[ds.platform_id].push(ds);
+        });
+
+        var noticeEl = el('div', { class: 'dsv-form-message dsv-ok', role: 'status', text: notice || '' });
+        var formHost = el('div');
+        var ctx = {
+            platforms: platforms,
+            datasources: datasources,
+            close: function () { formHost.innerHTML = ''; },
+            reload: function (message) { loadManage(root, message); }
+        };
+
+        function openForm(form) {
+            noticeEl.textContent = '';
+            formHost.innerHTML = '';
+            formHost.appendChild(form);
+            form.scrollIntoView({ block: 'nearest' });
+            var first = form.querySelector('input:not([disabled]), select:not([disabled]), textarea');
+            if (first) { first.focus(); }
+        }
+
+        function actionButton(text, onClick, extraClass) {
+            var button = el('button', {
+                type: 'button', class: 'dsv-button-small' + (extraClass ? ' ' + extraClass : ''), text: text
+            });
+            button.addEventListener('click', onClick);
+            return button;
+        }
+
+        function remove(path, question, doneNotice) {
+            if (!window.confirm(question)) { return; }
+            restDelete(path).done(function () {
+                ctx.reload(doneNotice);
+            }).fail(function (err) {
+                console.error('[dsv]', err);
+                noticeEl.textContent = 'Delete failed: ' + errorText(err);
+                noticeEl.className = 'dsv-form-message dsv-error';
+            });
+        }
+
+        var addPlatformButton = el('button', { type: 'button', class: 'dsv-button', text: 'Add platform' });
+        addPlatformButton.addEventListener('click', function () { openForm(buildPlatformForm(ctx, null)); });
+        root.appendChild(el('div', { class: 'dsv-toolbar' }, [addPlatformButton]));
+        root.appendChild(noticeEl);
+        root.appendChild(formHost);
+
+        if (!platforms.length) {
+            root.appendChild(el('p', {
+                class: 'dsv-empty',
+                text: 'No platforms yet. Add a platform, then add the data sources to validate under it.'
+            }));
+            return;
+        }
+
+        var table = el('table', { class: 'dsv-table' }, [
+            el('thead', {}, [
+                el('tr', {}, [
+                    el('th', { text: 'Platform / Data Source' }),
+                    el('th', { text: 'ID' }),
+                    el('th', { text: 'Description / Search' }),
+                    el('th', { text: 'Enabled' }),
+                    el('th', { text: '' })
+                ])
+            ])
+        ]);
+        var tbody = el('tbody');
+
+        platforms.forEach(function (platform) {
+            var children = byPlatform[platform.platform_id] || [];
+            tbody.appendChild(el('tr', { class: 'dsv-platform-row' }, [
+                el('td', { text: platform.name }),
+                el('td', {}, [el('code', { class: 'dsv-code', text: platform.platform_id })]),
+                el('td', { text: platform.description || '' }),
+                el('td', { text: platform.enabled ? 'Yes' : 'No' }),
+                el('td', { class: 'dsv-actions' }, [
+                    actionButton('Add data source', function () {
+                        openForm(buildDatasourceForm(ctx, null, platform.platform_id));
+                    }),
+                    actionButton('Edit', function () { openForm(buildPlatformForm(ctx, platform)); }),
+                    actionButton('Delete', function () {
+                        remove(
+                            'datasource_validator/platforms/' + encodeURIComponent(platform.platform_id),
+                            'Delete the platform "' + platform.name + '"' +
+                                (children.length ? ' and its ' + children.length + ' data source(s)' : '') +
+                                '? This cannot be undone.',
+                            'Platform "' + platform.name + '" deleted.'
+                        );
+                    }, 'dsv-button-danger')
+                ])
+            ]));
+
+            children.forEach(function (ds) {
+                tbody.appendChild(el('tr', { class: 'dsv-datasource-row' }, [
+                    el('td', { class: 'dsv-indent', text: ds.name }),
+                    el('td', {}, [el('code', { class: 'dsv-code', text: ds.datasource_id })]),
+                    el('td', {}, [el('code', { class: 'dsv-code dsv-query', text: ds.spl_query, title: ds.spl_query })]),
+                    el('td', { text: ds.enabled ? 'Yes' : 'No' }),
+                    el('td', { class: 'dsv-actions' }, [
+                        actionButton('Edit', function () { openForm(buildDatasourceForm(ctx, ds)); }),
+                        actionButton('Delete', function () {
+                            remove(
+                                'datasource_validator/datasources/' + encodeURIComponent(ds.datasource_id),
+                                'Delete the data source "' + ds.name + '"? This cannot be undone.',
+                                'Data source "' + ds.name + '" deleted.'
+                            );
+                        }, 'dsv-button-danger')
+                    ])
+                ]));
+            });
+        });
+        table.appendChild(tbody);
+        root.appendChild(table);
     }
 
     // ------------------------------------------------------------------
@@ -321,6 +770,7 @@ require([
             renderHealth(root, health || {});
             setTimeout(function () { loadHealth(root); }, HEALTH_POLL_INTERVAL_MS);
         }).fail(function (err) {
+            console.error('[dsv]', err);
             root.innerHTML = '';
             root.appendChild(el('p', { class: 'dsv-error', text: 'Could not load health status: ' + errorText(err) }));
             setTimeout(function () { loadHealth(root); }, HEALTH_POLL_INTERVAL_MS);
@@ -365,10 +815,12 @@ require([
     $(document).ready(function () {
         var setupRoot = document.getElementById('dsv-setup-root');
         var homeRoot = document.getElementById('dsv-home-root');
+        var manageRoot = document.getElementById('dsv-manage-root');
         var healthRoot = document.getElementById('dsv-health-root');
 
         if (setupRoot) { initSetup(setupRoot); }
         if (homeRoot) { initHome(homeRoot); }
+        if (manageRoot) { initManage(manageRoot); }
         if (healthRoot) { initHealth(healthRoot); }
     });
 });

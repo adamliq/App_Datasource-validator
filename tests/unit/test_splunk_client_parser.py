@@ -19,7 +19,7 @@ from app.splunk_client import (  # noqa: E402
     _split_top_level,
     _tokenize_pipeline,
 )
-from app.query_validator import ParserUnavailableError  # noqa: E402
+from app.query_validator import ParserUnavailableError, SearchRejectedError  # noqa: E402
 
 
 class ExtractNormalizedSearchTests(unittest.TestCase):
@@ -34,6 +34,15 @@ class ExtractNormalizedSearchTests(unittest.TestCase):
     def test_extracts_from_top_level_search(self):
         body = {"search": "search index=main"}
         self.assertEqual(_extract_normalized_search(body), "search index=main")
+
+    def test_extracts_from_events_search(self):
+        # The actual flat (no "entry" wrapper) shape this endpoint returns
+        # on a real Splunk instance.
+        body = {
+            "normalizedSearch": 'litsearch index=main | fields keepcolorder=t "_bkt"',
+            "eventsSearch": "search index=main | head 1",
+        }
+        self.assertEqual(_extract_normalized_search(body), "search index=main | head 1")
 
     def test_returns_none_when_nothing_recognizable(self):
         self.assertIsNone(_extract_normalized_search({"unexpected": "shape"}))
@@ -87,6 +96,19 @@ class SplunkRestSearchParserTests(unittest.TestCase):
         self.assertEqual(result.leading_command, "search")
         self.assertIn("stats", result.main_pipeline_commands)
 
+    def test_parse_calls_search_parser_with_post_and_q_in_body(self):
+        # Confirmed live against a real Splunk instance: /services/search/
+        # parser returns 405 "The method is not allowed" on GET - it must
+        # be called as POST with q in the form body, not the query string.
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        response_body = {"entry": [{"content": {"search": "search index=main"}}]}
+        with patch("app.splunk_client.request", return_value=(response_body, 200)) as mock_request:
+            parser.parse("index=main")
+        call_args = mock_request.call_args
+        self.assertEqual(call_args.kwargs.get("method"), "POST")
+        self.assertEqual(call_args.kwargs.get("postargs"), {"q": "index=main"})
+        self.assertIsNone(call_args.kwargs.get("getargs"))
+
     def test_parse_marks_ambiguous_on_unrecognized_shape(self):
         parser = SplunkRestSearchParser(session_key="fake-key")
         with patch("app.splunk_client.request", return_value=({"nothing": "useful"}, 200)):
@@ -96,6 +118,26 @@ class SplunkRestSearchParserTests(unittest.TestCase):
     def test_parse_raises_parser_unavailable_on_rest_error(self):
         parser = SplunkRestSearchParser(session_key="fake-key")
         with patch("app.splunk_client.request", side_effect=SplunkRestError("connection refused")):
+            with self.assertRaises(ParserUnavailableError):
+                parser.parse("index=main")
+
+    def test_parse_reports_a_400_as_the_search_being_refused(self):
+        # The real shape of a parser refusal: HTTP 400 with a splunkd
+        # messages body, delivered as bytes.
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        error = SplunkRestError(
+            "POST /services/search/parser returned status 400", status=400,
+            body=b'{"messages":[{"type":"FATAL","text":"Unknown search command \'serach\'."}]}',
+        )
+        with patch("app.splunk_client.request", side_effect=error):
+            with self.assertRaises(SearchRejectedError) as ctx:
+                parser.parse("serach index=main")
+        self.assertEqual(str(ctx.exception), "Unknown search command 'serach'.")
+
+    def test_parse_treats_other_statuses_as_parser_unavailable(self):
+        parser = SplunkRestSearchParser(session_key="fake-key")
+        error = SplunkRestError("POST ... returned status 503", status=503, body=b"{}")
+        with patch("app.splunk_client.request", side_effect=error):
             with self.assertRaises(ParserUnavailableError):
                 parser.parse("index=main")
 

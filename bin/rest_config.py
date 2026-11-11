@@ -6,14 +6,26 @@ GET returns whether setup has completed and the app's non-secret
 settings (never the stored password). POST is the only place the
 dsv_service credential is ever written: it's verified with a real login
 attempt before being persisted, so a typo never silently becomes the
-stored credential, and once stored, is_configured flips true and the
-validation worker input is enabled.
+stored credential, and once stored, is_configured flips true. The
+validation worker input is enabled as the last step; if that alone
+fails, the credential/settings save already succeeded and is not rolled
+back - the response carries a "warning" instead of failing outright.
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Imported as a module, not `from app.rest_base import DsvPersistentHandler`
+# - Splunk's persist-connection loader scans this script's own top-level
+# namespace for every class satisfying `issubclass(_,
+# PersistentServerConnectionApplication)` and fails to start ("More than
+# one class implements PersistentServerConnectionApplication") if it
+# finds more than one. A direct import makes the shared base class itself
+# a top-level name here, alongside the one concrete handler below -
+# module-qualifying the reference keeps it out of that scan. Confirmed
+# live: this is exactly what broke setup-page saves.
+from app import rest_base  # noqa: E402
 from app import security  # noqa: E402
 from app.models.settings import (  # noqa: E402
     DEFAULT_DISPATCH_TIMEOUT_SEC,
@@ -22,7 +34,6 @@ from app.models.settings import (  # noqa: E402
     SEARCH_TIME_RANGE_LATEST,
     SettingsStore,
 )
-from app.rest_base import DsvPersistentHandler  # noqa: E402
 from app.splunk_client import (  # noqa: E402
     ServiceHandle,
     SplunkRestError,
@@ -40,7 +51,7 @@ SETTINGS_FIELDS = {
 }
 
 
-class DsvConfigHandler(DsvPersistentHandler):
+class DsvConfigHandler(rest_base.DsvPersistentHandler):
     def handle_get(self, request):
         service = ServiceHandle(request.session_key)
         credential = security.get_service_credential(service)
@@ -74,6 +85,26 @@ class DsvConfigHandler(DsvPersistentHandler):
                 settings_store.set(field, str(caster(payload[field])), updated_by=request.user)
 
         set_app_configured(request.session_key)
-        enable_modular_input(request.session_key)
 
-        return {"configured": True, "service_username": username}
+        # The credential and settings above are the part of "save" that
+        # must not be lost: they're already durably written by this
+        # point. Enabling the worker input is the last step, but if it
+        # 404s (observed live: the modular input object can be absent
+        # even when inputs.conf is correctly loaded - an environment/
+        # registration issue, not something this save can fix) that must
+        # not discard an otherwise-successful credential save and report
+        # a hard failure for something that did work.
+        worker_enable_warning = None
+        try:
+            enable_modular_input(request.session_key)
+        except SplunkRestError as e:
+            worker_enable_warning = (
+                "Service account saved, but the validation worker could not be "
+                f"enabled automatically: {e}. Enable it manually under Settings "
+                "> Data Inputs once available, or retry setup."
+            )
+
+        result = {"configured": True, "service_username": username}
+        if worker_enable_warning:
+            result["warning"] = worker_enable_warning
+        return result

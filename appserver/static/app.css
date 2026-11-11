@@ -134,6 +134,115 @@
     border-radius: 4px;
 }
 
+.dsv-form input[type="checkbox"] {
+    width: auto;
+    margin: 0 4px 0 0;
+}
+
+.dsv-form textarea, .dsv-form select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    margin-top: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.dsv-form textarea {
+    font-family: Consolas, Menlo, monospace;
+    resize: vertical;
+}
+
+.dsv-form input:disabled, .dsv-form select:disabled {
+    background: #f2f2f2;
+    color: #777;
+}
+
+.dsv-form-wide {
+    max-width: 640px;
+}
+
+.dsv-panel {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 16px 12px;
+    margin: 8px 0 16px;
+    background: #fcfcfc;
+}
+
+.dsv-panel h3 {
+    margin: 10px 0 0;
+}
+
+.dsv-hint {
+    margin: 4px 0 0;
+    font-size: 0.85em;
+    color: #777;
+}
+
+.dsv-form label.dsv-checkbox {
+    font-weight: 400;
+}
+
+.dsv-form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.dsv-button-secondary {
+    background: #fff;
+    color: #333;
+    border: 1px solid #bbb;
+}
+
+.dsv-button-secondary:hover {
+    background: #eee;
+}
+
+.dsv-button-danger {
+    background: #c0392b;
+}
+
+.dsv-button-danger:hover {
+    background: #96281b;
+}
+
+.dsv-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.dsv-actions .dsv-button-small {
+    margin-left: 6px;
+}
+
+.dsv-indent {
+    padding-left: 28px !important;
+}
+
+.dsv-code {
+    font-family: Consolas, Menlo, monospace;
+    font-size: 0.9em;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #444;
+}
+
+.dsv-query {
+    display: block;
+    max-width: 460px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dsv-empty {
+    color: #666;
+    margin-top: 12px;
+}
+
 .dsv-form-message {
     margin-top: 10px;
     min-height: 1.2em;
