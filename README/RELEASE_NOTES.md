@@ -1,5 +1,39 @@
 # Release Notes — Data Source Validator
 
+## 1.1.0 — [DATE]
+
+Added a **Manage** page (navigation: Data Source Validator - Manage) for
+adding, editing and deleting platforms and their data sources from the
+UI. Until now this was only possible through the REST API.
+
+- Saving requires the `dsv_manage_datasources` capability; a user without
+  it can open the page but gets a "Forbidden" error on save or delete.
+- An ID is suggested from the name on create and cannot be changed
+  afterwards. A data source cannot be moved to another platform.
+- Deleting a platform also deletes its data sources (asked for
+  confirmation first).
+- The home page now points to the Manage page when nothing is configured.
+
+- A search that Splunk refuses (a typo, an unknown or forbidden command)
+  is reported in Splunk's own words, e.g. "Splunk refused this search:
+  Unknown search command 'serach'." It was previously reported as "search
+  parser unavailable" followed by the raw HTTP response.
+- Fixed error messages on every page: a rejected request showed only the
+  HTTP status text ("Bad Request") instead of the reason the server gave.
+
+REST API changes that came with it:
+
+- `enabled`, `sort_order` and `stale_threshold_sec` are converted to real
+  types on create and update. A form-encoded `enabled=false` was
+  previously stored as a truthy string, so a platform or data source
+  could not be disabled that way. An empty `stale_threshold_sec` now
+  clears the override and returns to the app default.
+- A blank `name` is rejected.
+- Creating a platform or data source with an ID that already exists
+  returns a clear 400 instead of an internal error.
+- Updating a data source with an unchanged `spl_query` no longer resets
+  its status to Not Run.
+
 ## 1.0.10 — [DATE]
 
 Fixed eight real bugs found via live testing against a real Splunk

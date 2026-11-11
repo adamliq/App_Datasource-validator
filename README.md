@@ -7,7 +7,8 @@ returns **at least one event**, with data sources grouped under parent
 ## What it does
 
 - You define platforms (e.g. "Firewall", "EDR") and, under each, one or more
-  data sources with an SPL search that should return events.
+  data sources with an SPL search that should return events - on the app's
+  Manage page, or through its REST API.
 - A single sequential validation worker runs each data source's search (via a
   dedicated, least-privilege service account) on a schedule or on demand, and
   records PASS / FAIL / ERROR / STALE per data source.

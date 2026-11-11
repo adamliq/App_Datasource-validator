@@ -155,6 +155,7 @@ REQUIRED_FILES = [
     "default/data/ui/nav/default.xml",
     "default/data/ui/views/setup.xml",
     "default/data/ui/views/home.xml",
+    "default/data/ui/views/manage.xml",
     "default/data/ui/views/health.xml",
     "appserver/static/app.js",
     "appserver/static/app.css",
