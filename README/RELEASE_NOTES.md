@@ -85,7 +85,10 @@ AppInspect or the offline validator:
    instead - ISO-8601 UTC timestamps in this app's fixed, zero-padded
    format sort identically whether compared as strings or as real
    timestamps, so the existing `sort="-created_time"` etc. KV Store
-   queries are unaffected.
+   queries are unaffected. Records written by an earlier version keep
+   their missing timestamps until they are next written; the worker
+   lease now backfills its own `acquired_time` on the next renewal
+   rather than carrying the blank forward.
 
 ## 1.0.9 — [DATE]
 

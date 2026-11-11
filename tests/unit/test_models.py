@@ -306,6 +306,24 @@ class WorkerLeaseStoreTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.owner, "member-a")
 
+    def test_renewal_keeps_the_original_acquired_time(self):
+        first = self.store.try_acquire("member-a", ttl_seconds=30)
+        raw = self.store._collection.get("dsv_validation_worker")
+        raw["acquired_time"] = "2020-01-01T00:00:00.000Z"
+        self.store._collection.update("dsv_validation_worker", raw)
+        renewed = self.store.try_acquire("member-a", ttl_seconds=30)
+        self.assertIsNotNone(first)
+        self.assertEqual(renewed.acquired_time, "2020-01-01T00:00:00.000Z")
+
+    def test_renewal_backfills_a_lease_stored_without_acquired_time(self):
+        self.store.try_acquire("member-a", ttl_seconds=30)
+        raw = self.store._collection.get("dsv_validation_worker")
+        raw.pop("acquired_time", None)
+        self.store._collection.update("dsv_validation_worker", raw)
+        renewed = self.store.try_acquire("member-a", ttl_seconds=30)
+        self.assertTrue(renewed.acquired_time)
+        self.assertTrue(self.store.get().acquired_time)
+
     def test_expired_lease_can_be_taken_by_another_owner(self):
         self.store.try_acquire("member-a", ttl_seconds=30)
         lease = self.store.get()
