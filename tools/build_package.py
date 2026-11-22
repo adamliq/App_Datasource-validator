@@ -33,7 +33,9 @@ DIST_DIR = APP_ROOT.parent / "dist"
 # must never ship inside the .spl.
 EXCLUDE_DIR_NAMES = {"tests", "tools", "__pycache__", ".git", ".pytest_cache"}
 EXCLUDE_FILE_NAMES = {"HANDOFF.md"}
-EXCLUDE_FILE_SUFFIXES = {".pyc", ".pyo"}
+# A built .spl is committed at the repo root, which is also the app root;
+# without ".spl" here the next build would pack the previous one inside itself.
+EXCLUDE_FILE_SUFFIXES = {".pyc", ".pyo", ".spl"}
 
 REPORT = {"stages": [], "ok": True}
 
