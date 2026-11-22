@@ -19,7 +19,7 @@ from app.splunk_client import (  # noqa: E402
     _split_top_level,
     _tokenize_pipeline,
 )
-from app.query_validator import ParserUnavailableError, SearchRejectedError  # noqa: E402
+from app.query_validator import ParserUnavailableError, QueryValidator, SearchRejectedError  # noqa: E402
 
 
 class ExtractNormalizedSearchTests(unittest.TestCase):
@@ -48,6 +48,23 @@ class ExtractNormalizedSearchTests(unittest.TestCase):
         self.assertIsNone(_extract_normalized_search({"unexpected": "shape"}))
         self.assertIsNone(_extract_normalized_search("not even a dict"))
         self.assertIsNone(_extract_normalized_search({"entry": []}))
+
+    def test_joins_events_and_reports_parts_into_one_pipeline(self):
+        body = {
+            "eventsSearch": "search index=main ",
+            "reportsSearch": "stats  count  | outputlookup  probe.csv",
+        }
+        self.assertEqual(
+            _extract_normalized_search(body),
+            "search index=main | stats  count  | outputlookup  probe.csv",
+        )
+
+    def test_reports_part_alone_is_a_pipe_led_search(self):
+        body = {"eventsSearch": "", "reportsSearch": "tstats  count where index=main"}
+        self.assertEqual(_extract_normalized_search(body), "| tstats  count where index=main")
+
+    def test_empty_events_and_reports_is_unrecognizable(self):
+        self.assertIsNone(_extract_normalized_search({"eventsSearch": "", "reportsSearch": ""}))
 
 
 class TokenizePipelineTests(unittest.TestCase):
@@ -140,6 +157,94 @@ class SplunkRestSearchParserTests(unittest.TestCase):
         with patch("app.splunk_client.request", side_effect=error):
             with self.assertRaises(ParserUnavailableError):
                 parser.parse("index=main")
+
+
+# Replies captured from a live Splunk 10.6 /services/search/parser, trimmed
+# to the fields this app reads. Run through the real validator so the
+# policy is tested against what the platform actually returns.
+LIVE_REPLIES = {
+    "search index=main | stats count": {
+        "eventsSearch": "search index=main ",
+        "reportsSearch": "stats  count",
+        "commands": [{"command": "search"}, {"command": "stats"}],
+    },
+    "search index=main | stats count | outputlookup probe.csv": {
+        "eventsSearch": "search index=main ",
+        "reportsSearch": "stats  count  | outputlookup  probe.csv",
+        "commands": [{"command": "search"}, {"command": "stats"}, {"command": "outputlookup"}],
+    },
+    "search index=main | stats count by host | where count>0 | collect index=main": {
+        "eventsSearch": "search index=main ",
+        "reportsSearch": "stats  count by host  | where  count>0  | collect  index=main",
+        "commands": [{"command": "search"}, {"command": "stats"}, {"command": "where"}, {"command": "collect"}],
+    },
+    "| tstats count where index=main": {
+        "eventsSearch": "",
+        "reportsSearch": "tstats  count where index=main",
+        "commands": [{"command": "tstats"}],
+    },
+    "| inputlookup nothing.csv": {
+        "eventsSearch": "",
+        "reportsSearch": "inputlookup  nothing.csv",
+        "commands": [{"command": "inputlookup"}],
+    },
+    '| makeresults | eval status="ok"': {
+        "eventsSearch": "",
+        "reportsSearch": 'makeresults  | eval  status="ok"',
+        "commands": [{"command": "makeresults"}, {"command": "eval"}],
+    },
+    "| makeresults | outputlookup probe.csv": {
+        "eventsSearch": "",
+        "reportsSearch": "makeresults  | outputlookup  probe.csv",
+        "commands": [{"command": "makeresults"}, {"command": "outputlookup"}],
+    },
+}
+
+
+class ValidationAgainstLiveRepliesTests(unittest.TestCase):
+    def _validate(self, query, body=None):
+        validator = QueryValidator(SplunkRestSearchParser(session_key="fake-key"))
+        with patch("app.splunk_client.request", return_value=(body or LIVE_REPLIES[query], 200)):
+            return validator.validate(query)
+
+    def test_command_after_an_aggregating_step_still_hits_the_denylist(self):
+        for query in (
+            "search index=main | stats count | outputlookup probe.csv",
+            "search index=main | stats count by host | where count>0 | collect index=main",
+            "| makeresults | outputlookup probe.csv",
+        ):
+            with self.subTest(query=query):
+                result = self._validate(query)
+                self.assertFalse(result.allowed)
+                self.assertIn("disallowed command", result.reason)
+
+    def test_denylisted_command_listed_only_in_the_commands_array_is_caught(self):
+        body = {
+            "eventsSearch": "search index=main",
+            "reportsSearch": "",
+            "commands": [{"command": "search"}, {"command": "outputlookup"}],
+        }
+        result = self._validate("search index=main", body=body)
+        self.assertFalse(result.allowed)
+        self.assertIn("outputlookup", result.reason)
+
+    def test_aggregating_search_is_allowed_and_not_given_a_head(self):
+        result = self._validate("search index=main | stats count")
+        self.assertTrue(result.allowed)
+        self.assertEqual(result.executable_query, "search index=main | stats count")
+
+    def test_pipe_led_read_only_searches_are_allowed(self):
+        for query in ("| tstats count where index=main", "| inputlookup nothing.csv"):
+            with self.subTest(query=query):
+                result = self._validate(query)
+                self.assertTrue(result.allowed, result.reason)
+                self.assertEqual(result.executable_query, query)
+
+    def test_generating_command_without_an_admin_allowlist_is_refused_clearly(self):
+        result = self._validate('| makeresults | eval status="ok"')
+        self.assertFalse(result.allowed)
+        self.assertIn("leading command 'makeresults'", result.reason)
+        self.assertNotIn("ambiguous", result.reason)
 
 
 if __name__ == "__main__":

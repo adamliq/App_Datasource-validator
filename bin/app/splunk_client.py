@@ -358,6 +358,16 @@ class SplunkRestSearchParser(SearchParser):
                 ambiguous=True, ambiguous_reason=str(e),
             )
 
+        # The parser also lists the command of each pipeline stage. Adding
+        # those names to the set the denylist scans is purely additive: a
+        # command that appears in either the text or this list is seen.
+        listed = [
+            str(c.get("command", "")).strip().lower()
+            for c in (body.get("commands") if isinstance(body, dict) else None) or []
+            if isinstance(c, dict)
+        ]
+        all_commands = list(all_commands) + [c for c in listed if c and c not in all_commands]
+
         leading = main_commands[0] if main_commands else ""
         return ParsedSearch(
             leading_command=leading,
@@ -391,14 +401,31 @@ def _extract_normalized_search(body):
         if isinstance(normalized, str) and normalized.strip():
             return normalized
     # Confirmed live: this Splunk version's search/parser response has no
-    # "entry" wrapper - it's a flat dict whose "eventsSearch" field is the
-    # normalized pipeline using the original (non-macro-expanded) command
-    # names, e.g. "search index=_internal | head 1". "normalizedSearch" is
-    # NOT usable here - it's remapped to internal command names (e.g.
+    # "entry" wrapper - it's a flat dict that splits the normalized
+    # pipeline, using the original command names, across two fields:
+    # "eventsSearch" holds the leading streaming part and "reportsSearch"
+    # everything from the first transforming/generating command on, e.g.
+    #   search index=main | stats count | outputlookup x.csv
+    #     eventsSearch  "search index=main "
+    #     reportsSearch "stats  count  | outputlookup  x.csv"
+    #   | tstats count where index=main
+    #     eventsSearch  ""
+    #     reportsSearch "tstats  count where index=main"
+    # Both are needed: reading only eventsSearch hid every command after
+    # the first aggregating one from the denylist scan, and left a
+    # pipe-led search with nothing to read at all. "normalizedSearch" is
+    # NOT usable - it's remapped to internal command names (e.g.
     # "prehead") and has extra "| fields ..." stages appended.
     events_search = body.get("eventsSearch")
-    if isinstance(events_search, str) and events_search.strip():
-        return events_search
+    reports_search = body.get("reportsSearch")
+    events = events_search.strip() if isinstance(events_search, str) else ""
+    reports = reports_search.strip() if isinstance(reports_search, str) else ""
+    if events and reports:
+        return f"{events} | {reports}"
+    if events:
+        return events
+    if reports:
+        return f"| {reports}"
     # Some Splunk versions return the parsed search at the top level.
     top_level = body.get("search")
     if isinstance(top_level, str) and top_level.strip():

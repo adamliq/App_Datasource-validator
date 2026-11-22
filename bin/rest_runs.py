@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import rest_base  # noqa: E402
 from app.models.base import NotFoundError  # noqa: E402
-from app.rest_validation_shared import queue_item_dict, run_dict, stores  # noqa: E402
+from app.rest_validation_shared import parse_id_list, queue_item_dict, run_dict, stores  # noqa: E402
 from validation_controller import cancel_run, create_run  # noqa: E402
 
 
@@ -48,11 +48,10 @@ class DsvRunsHandler(rest_base.DsvPersistentHandler):
             return run_dict(run)
 
         payload = request.payload or {}
-        datasource_ids = payload.get("datasource_ids")
         run = create_run(
             st, created_by=request.user or "unknown",
             trigger_type=payload.get("trigger_type", "manual"),
-            datasource_ids=set(datasource_ids) if datasource_ids else None,
+            datasource_ids=parse_id_list(payload.get("datasource_ids"), "datasource_ids"),
         )
         return run_dict(run), 201
 
