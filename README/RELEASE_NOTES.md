@@ -1,5 +1,34 @@
 # Release Notes — Data Source Validator
 
+## 1.1.1 — [DATE]
+
+**Security fix - upgrade from 1.0.10 and 1.1.0.** Those versions checked a
+search against the blocked-command list (`collect`, `outputlookup`,
+`outputcsv`, `delete`, `sendemail`, `script`, `run`, `rest` and others) only
+up to its first aggregating command. Splunk's parser splits a search into a
+streaming part and a "reports" part (everything from the first `stats`,
+`chart`, `tstats` and similar on), and the app read only the first, so
+`search index=main | stats count | outputlookup x.csv` passed validation
+when saved and when run. The service account's own Splunk permissions still
+applied, but the app's control did not. The app now reads both parts, and
+also adds the command names the parser lists to what is checked. A data
+source already saved with a blocked command is checked again each time it
+runs and now ends in ERROR instead of running.
+
+- Searches that start with a pipe now work: `| tstats ...`, `| inputlookup`,
+  `| from`, `| metadata`, `| mstats` and `| datamodel`. They were rejected
+  as "ambiguous". Generating commands such as `| makeresults` are still
+  refused, now with the reason "leading command 'makeresults' is not
+  read-only and is not on the admin allowlist". Pass/fail is "at least one
+  result row", so a bare `| tstats count` always passes, even with no data;
+  group it (`by host`) and the Manage page now says so.
+- The per-platform **Run** button on the home page never worked: it sent
+  the data source ids as a form-encoded JSON string, which the server
+  treated as a set of single characters and so matched nothing ("no enabled
+  data sources ... to validate"). The ids are now parsed properly, each is
+  checked as a plain identifier, and an explicit empty list selects nothing
+  rather than everything.
+
 ## 1.1.0 — [DATE]
 
 Added a **Manage** page (navigation: Data Source Validator - Manage) for

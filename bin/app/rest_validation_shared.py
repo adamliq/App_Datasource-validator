@@ -21,6 +21,9 @@ rather than splitting those further into a second "item" handler behind
 a second, trailing-slash restmap match - see restmap.conf's header
 comment for why that second stanza doesn't actually work.
 """
+import json
+
+from app import security
 from app.models.base import NotFoundError  # noqa: F401 - re-exported for handler modules
 from app.models.datasource import DataSourceStore
 from app.models.platform import PlatformStore
@@ -90,6 +93,39 @@ def clean_metadata(payload, allowed_fields):
             value = value.strip()
         fields[key] = value
     return fields
+
+
+def parse_id_list(value, field_name):
+    """
+    Reads an optional list of ids from a request body. A JSON body gives a
+    real list, but a form-encoded one (what the app's own UI sends)
+    delivers a string - either a JSON array ('["a","b"]') or comma
+    separated ('a,b'). Returns None when the field is absent or blank
+    ("no restriction"); an explicit empty list returns an empty set, which
+    must select nothing rather than everything.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.startswith("["):
+            try:
+                value = json.loads(text)
+            except ValueError:
+                raise ValueError(f"{field_name} must be a JSON list of ids")
+        else:
+            value = text.split(",")
+    if not isinstance(value, (list, tuple, set)):
+        raise ValueError(f"{field_name} must be a list of ids")
+    ids = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f"{field_name} must contain only text ids")
+        if item.strip():
+            ids.add(security.validate_identifier(item.strip(), field_name))
+    return ids
 
 
 def stores(session_key):

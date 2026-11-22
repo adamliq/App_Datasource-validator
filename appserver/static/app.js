@@ -590,9 +590,11 @@ require([
                 ? 'The ID cannot be changed after the data source is created.'
                 : 'Letters, numbers, underscores and hyphens. Cannot be changed later.'),
             formField('Search', queryInput,
-                'A search that returns at least one event while the data source is healthy, for example: ' +
-                'search index=main sourcetype=my:sourcetype | head 1. It runs as the validation service ' +
-                'account, so it only sees indexes that account is allowed to search.' +
+                'A search that returns at least one result while the data source is healthy, for example: ' +
+                'search index=main sourcetype=my:sourcetype | head 1. A search may also start with a pipe, ' +
+                'such as | tstats count where index=main by host - group a tstats search with by, because ' +
+                'a bare tstats count always returns one row even when there is no data. It runs as the ' +
+                'validation service account, so it only sees indexes that account is allowed to search.' +
                 (editing ? ' Changing the search resets the status to Not Run.' : '')),
             formField('Description', descriptionInput),
             formField('Staleness threshold (seconds)', staleInput, 'Leave blank to use the app default.'),
