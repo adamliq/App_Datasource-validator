@@ -1,11 +1,11 @@
 {
     "schemaVersion": "2.0.0",
     "info": {
-        "title": "Data Source Validator",
+        "title": "Licoryx Datasource Validator",
         "id": {
             "group": null,
             "name": "datasource_validator",
-            "version": "1.1.1"
+            "version": "1.1.4"
         },
         "author": [
             {

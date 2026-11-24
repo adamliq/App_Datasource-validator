@@ -1,5 +1,5 @@
 <dashboard script="app.js" stylesheet="app.css" version="1.1">
-  <label>Data Source Validator - Manage</label>
+  <label>Licoryx Datasource Validator - Manage</label>
   <description>Add, edit and delete platforms and their data sources.</description>
   <row>
     <panel>

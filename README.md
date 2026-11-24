@@ -1,4 +1,4 @@
-# Data Source Validator
+# Licoryx Datasource Validator
 
 A Splunk app that validates whether each user-defined **data source** currently
 returns **at least one event**, with data sources grouped under parent

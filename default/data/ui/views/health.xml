@@ -1,5 +1,5 @@
 <dashboard script="app.js" stylesheet="app.css" version="1.1">
-  <label>Data Source Validator - Health</label>
+  <label>Licoryx Datasource Validator - Health</label>
   <description>Validation worker lease status and queue depth.</description>
   <row>
     <panel>

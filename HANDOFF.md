@@ -1,4 +1,4 @@
-# Data Source Validator — Build Handoff
+# Licoryx Datasource Validator — Build Handoff
 
 A Splunk app that validates whether each user-defined **data source** currently
 returns **≥ 1 event**, with data sources grouped under parent **platforms**.
@@ -174,7 +174,7 @@ allowed indexes (per deployment).
 ---
 
 ## Continuation prompt (paste into Claude Code)
-> Continue building the Splunk "Data Source Validator" app in this repo. Read
+> Continue building the Splunk "Licoryx Datasource Validator" app in this repo. Read
 > `HANDOFF.md` for the locked decisions, architecture, status rules, and
 > query-safety design. Phase 1 (config + manifest) is complete and passes
 > `tools/validate_phase1.py`. Build **Phase 2** now: the `bin/app` Python core —

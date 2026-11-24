@@ -1,5 +1,5 @@
 #
-# Data Source Validator - default.meta
+# Licoryx Datasource Validator - default.meta
 #
 # Least-privilege object permissions. Nothing here relies on the
 # admin_all_objects capability, and dsv_service (the dedicated search

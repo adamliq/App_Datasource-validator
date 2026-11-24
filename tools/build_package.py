@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build the Splunkbase-ready .spl package for Data Source Validator.
+Build the Splunkbase-ready .spl package for Licoryx Datasource Validator.
 
 Pipeline: clean -> structural/conf/XML/JSON lint + full unit test suite
 (delegates to tools/validate_phase1.py) -> secret scan -> dependency
