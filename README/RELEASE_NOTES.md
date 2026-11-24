@@ -1,5 +1,39 @@
 # Release Notes — Data Source Validator
 
+## 1.1.2 — [DATE]
+
+**The validation worker now starts and runs on its own.** Until now, saving
+the service account on the setup page ended with "Saved with a warning: ...
+the validation worker could not be enabled automatically ... HTTP 404", and
+validations never ran without someone running the worker by hand. There
+were two causes, both in the package:
+
+1. `README/inputs.conf.spec` declared the input without listing any
+   parameter. Splunk silently ignores such a stanza, so the input type was
+   never registered and the enable call returned 404. The stanza now lists
+   `interval`. (Fixed first by adamliq, who found it from the bundled apps'
+   specs; this release keeps that line and documents why it must stay.)
+2. The worker's scheme declared `use_single_instance` as true. In that mode
+   Splunk starts one long-lived process and ignores `interval`
+   ("Ignoring parameter interval ... when scheduling the runtime" in
+   `splunkd.log`), but the worker does one unit of work and exits, relying
+   on Splunk to start it again every few seconds. So it ran once and never
+   again. It is now false.
+
+Checked on a real Splunk instance: the input registers, the setup save
+returns no warning, the lease heartbeat advances every 5 seconds with
+nothing else running, "Run All Enabled" completes by itself (about 10
+seconds per data source), and after a run of failed worker starts Splunk
+resumes scheduling it within one interval.
+
+The 1.0.9 note below, which put the missing registration down to a
+restriction on third-party apps in the test image, was wrong; the cause was
+cause 1 above.
+
+**To upgrade:** install 1.1.2, then save the service account on the setup
+page again (or enable `dsv_validation_worker://main` under Settings > Data
+inputs). Check the Health page shows "Validation worker is active".
+
 ## 1.1.1 — [DATE]
 
 **Security fix - upgrade from 1.0.10 and 1.1.0.** Those versions checked a

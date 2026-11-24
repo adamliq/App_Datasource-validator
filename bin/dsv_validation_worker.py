@@ -55,11 +55,19 @@ from validation_controller import Stores, run_tick  # noqa: E402
 
 LEASE_TTL_SEC = 30
 
+# use_single_instance must be false. In single-instance mode splunkd starts
+# one long-lived process and ignores the stanza's `interval` ("Ignoring
+# parameter interval ... when scheduling the runtime" in splunkd.log), but
+# this script does one tick and exits, relying on splunkd to start it again
+# every `interval` seconds - which it only does in per-stanza mode. With the
+# setting wrong the worker ran once at startup (or when the input was toggled)
+# and then never again. The KV Store lease, not this setting, is what keeps
+# a single worker active across search-head-cluster members.
 SCHEME_XML = """<scheme>
   <title>Data Source Validator - Validation Worker</title>
   <description>Single sequential dispatcher for data source validation searches. This input is managed by the app's setup page - do not add a second stanza, and do not run more than one.</description>
   <use_external_validation>false</use_external_validation>
-  <use_single_instance>true</use_single_instance>
+  <use_single_instance>false</use_single_instance>
   <streaming_mode>simple</streaming_mode>
   <endpoint>
     <args/>
