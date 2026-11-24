@@ -1,5 +1,14 @@
 # Release Notes — Licoryx Datasource Validator
 
+## 1.1.4 — [DATE]
+
+Added an app icon: a database stack with a green check mark, in the same
+blue as the app's navigation bar. It replaces the grey "App" placeholder
+in the app list and the sidebar. `static/` holds `appIcon.png` (36 x 36),
+`appIcon_2x.png` (72 x 72) and the lighter `appIconAlt` pair that Splunk
+uses on dark backgrounds. The SVG sources are in `tools/icons/`; run
+`node tools/render_icons.js` to regenerate the PNGs.
+
 ## 1.1.3 — [DATE]
 
 The app is now called **Licoryx Datasource Validator** (it was "Data Source
