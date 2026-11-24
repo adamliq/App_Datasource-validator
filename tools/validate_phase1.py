@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Offline structural validator for the Data Source Validator Splunk app.
+Offline structural validator for the Licoryx Datasource Validator Splunk app.
 
 Checks Phase 1 packaging artifacts (app.manifest, default/*.conf,
 metadata/default.meta) for internal consistency: no duplicate stanzas or

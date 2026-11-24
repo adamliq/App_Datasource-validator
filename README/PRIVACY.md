@@ -1,4 +1,4 @@
-# Privacy Policy — Data Source Validator
+# Privacy Policy — Licoryx Datasource Validator
 
 **Status: DRAFT — not yet reviewed or approved for publication.** This is a
 skeleton derived from the app's actual architecture (see `HANDOFF.md`) to
@@ -8,7 +8,7 @@ distributed.
 
 ## What this app does
 
-Data Source Validator runs customer-defined SPL searches on a schedule (or
+Licoryx Datasource Validator runs customer-defined SPL searches on a schedule (or
 on demand) to confirm each configured data source is still returning
 events, and stores only the outcome of each check — not the underlying
 event data.

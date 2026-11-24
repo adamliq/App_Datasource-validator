@@ -1,5 +1,5 @@
 <dashboard script="app.js" stylesheet="app.css" version="1.1">
-  <label>Data Source Validator</label>
+  <label>Licoryx Datasource Validator</label>
   <description>Platform and data source validation status.</description>
   <row>
     <panel>

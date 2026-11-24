@@ -1,5 +1,5 @@
 """
-Structured JSON logging for the Data Source Validator app.
+Structured JSON logging for the Licoryx Datasource Validator app.
 
 Writes one JSON object per line to
 $SPLUNK_HOME/var/log/splunk/datasource_validator_<component>.log, which

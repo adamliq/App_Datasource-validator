@@ -1,1 +1,1 @@
-"""Data Source Validator - shared application package (bin/app)."""
+"""Licoryx Datasource Validator - shared application package (bin/app)."""

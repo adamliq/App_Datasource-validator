@@ -1,5 +1,5 @@
 /*
- * Data Source Validator - app.js
+ * Licoryx Datasource Validator - app.js
  *
  * Drives the four custom Simple XML views (setup.xml, home.xml,
  * manage.xml, health.xml) against this app's own REST endpoints (restmap.conf /

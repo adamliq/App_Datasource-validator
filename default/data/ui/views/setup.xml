@@ -1,5 +1,5 @@
 <dashboard script="app.js" stylesheet="app.css" version="1.1">
-  <label>Data Source Validator - Setup</label>
+  <label>Licoryx Datasource Validator - Setup</label>
   <description>Configure the dedicated service account this app uses for every validation search.</description>
   <row>
     <panel>

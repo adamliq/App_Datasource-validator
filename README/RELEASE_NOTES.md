@@ -1,4 +1,17 @@
-# Release Notes — Data Source Validator
+# Release Notes — Licoryx Datasource Validator
+
+## 1.1.3 — [DATE]
+
+The app is now called **Licoryx Datasource Validator** (it was "Data Source
+Validator"). The name changes in the app list, the navigation and page
+titles, Settings > Data inputs, the manifest and the privacy policy.
+
+Nothing else changes, so an existing install upgrades in place: the app ID
+and folder (`datasource_validator`), every URL and REST endpoint, the KV
+Store collections and their data, the saved service account, the `dsv_*`
+roles and capabilities, the "DSV - ..." saved search names and the log file
+names are all unchanged. Bookmarks to `.../app/datasource_validator/...`
+keep working. Entries below are left under the name they were released with.
 
 ## 1.1.2 — [DATE]
 

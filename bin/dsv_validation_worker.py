@@ -64,7 +64,7 @@ LEASE_TTL_SEC = 30
 # and then never again. The KV Store lease, not this setting, is what keeps
 # a single worker active across search-head-cluster members.
 SCHEME_XML = """<scheme>
-  <title>Data Source Validator - Validation Worker</title>
+  <title>Licoryx Datasource Validator - Validation Worker</title>
   <description>Single sequential dispatcher for data source validation searches. This input is managed by the app's setup page - do not add a second stanza, and do not run more than one.</description>
   <use_external_validation>false</use_external_validation>
   <use_single_instance>false</use_single_instance>
